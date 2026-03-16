@@ -1,0 +1,32 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:wght@700;800;900&display=swap');
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Montserrat", sans-serif;
+
+  --color-jogeda-green: #A4C639;
+  --color-jogeda-dark: #1A1A1A;
+}
+
+@layer base {
+  body {
+    @apply antialiased bg-white text-jogeda-dark;
+  }
+}
+
+.hexagon-clip {
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+}
+
+.diagonal-split {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 70%);
+}
+
+.section-heading {
+  @apply font-display font-black uppercase tracking-tight text-5xl md:text-7xl leading-none;
+}
+
+.sub-heading {
+  @apply font-display font-bold uppercase tracking-wider text-jogeda-green text-xl md:text-2xl mb-4;
+}
