@@ -17,14 +17,42 @@ import {
   Briefcase,
   FileText,
   Camera,
-  Linkedin
+  Linkedin,
+  X
 } from 'lucide-react';
+import { QrScanner } from '../components/QrScanner';
+import { RegisterQrSection } from '../components/RegisterQrSection';
 
 interface TemplateProps {
   onRegister: () => void;
 }
 
 export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [checkInMessage, setCheckInMessage] = useState<string | null>(null);
+  const [hasOpenedUrlForScan, setHasOpenedUrlForScan] = useState(false);
+  const [showRegisteredModal, setShowRegisteredModal] = useState(false);
+  const sectorContainer = {
+    hidden: {},
+    show: {
+      transition: {
+        staggerChildren: 0.08,
+        delayChildren: 0.05,
+      },
+    },
+  };
+
+  const sectorItem = {
+    hidden: { opacity: 0, y: 18 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.5, ease: 'easeOut' },
+    },
+  };
+
   return (
     <div className="min-h-screen font-sans">
       {/* Hero Section */}
@@ -41,23 +69,19 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
         </div>
         
         <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">
-          <div className="flex justify-between items-center mb-20">
-            <div className="flex items-center gap-6">
-              <img 
-                src="input_file_1.png" 
-                className="h-24 w-auto object-contain" 
-                alt="JoGEDA Logo" 
+          <div className="flex justify-between items-start mb-20">
+            <div className="flex items-start">
+              <img
+                src="/assets/images/1.png"
+                className="h-[140px] w-[140px] sm:h-[180px] sm:w-[180px] md:h-[300px] md:w-[300px] object-contain"
+                alt="Conference Logo"
                 referrerPolicy="no-referrer"
               />
-              <div className="h-16 w-px bg-zinc-200" />
-              <div className="text-xs font-black uppercase leading-tight tracking-[0.2em] text-jogeda-dark">
-                Joe Gqabi <br /> Investment <br /> Conference
-              </div>
             </div>
             <div className="hidden md:block">
               <img 
-                src="input_file_2.png" 
-                className="h-24 w-auto object-contain" 
+                src="/assets/images/7.png" 
+                className="h-[300px] w-[300px] object-contain absolute top-0 right-[550px]"
                 alt="Joe Gqabi District Municipality" 
                 referrerPolicy="no-referrer"
               />
@@ -70,13 +94,12 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
               animate={{ opacity: 1, y: 0 }}
               className="mb-4"
             >
-              <span className="text-jogeda-green font-black tracking-[0.4em] uppercase text-sm">Nexus of Opportunity</span>
               <h1 className="font-display font-black text-6xl md:text-8xl uppercase leading-[0.85] mt-2">
                 Investment <br />
                 <span className="text-jogeda-green">Conference</span>
               </h1>
               <p className="text-zinc-500 font-bold mt-6 max-w-lg">
-                Hosted by the Joe Gqabi Economic Development Agency (JoGEDA) in partnership with the Joe Gqabi District Municipality.
+                Hosted by the Joe Gqabi Economic Development Agency (JoGEDA) in partnership with the Joe Gqabi District.
               </p>
             </motion.div>
 
@@ -104,25 +127,166 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
                   <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
                     <Calendar className="text-jogeda-green w-5 h-5" />
                   </div>
-                  <span className="font-black uppercase tracking-widest text-sm">04 June 2026</span>
+                  <span className="font-black uppercase tracking-widest text-sm">4th &amp; 5th of June 2026</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
                     <MapPin className="text-jogeda-green w-5 h-5" />
                   </div>
-                  <span className="font-black uppercase tracking-widest text-sm">Maletswai, Eastern Cape</span>
+                  <span className="font-black uppercase tracking-widest text-sm">Joe Gqabi District</span>
                 </div>
-                <button 
-                  onClick={onRegister}
-                  className="bg-jogeda-dark text-white px-10 py-5 font-display font-black uppercase tracking-widest hover:bg-jogeda-green hover:text-jogeda-dark transition-all w-fit shadow-lg shadow-black/10"
-                >
-                  Register Now
-                </button>
+                <div className="flex flex-wrap gap-4">
+                  <button 
+                    onClick={onRegister}
+                    className="bg-jogeda-dark text-white px-10 py-5 font-display font-black uppercase tracking-widest hover:bg-jogeda-green hover:text-jogeda-dark transition-all w-fit shadow-lg shadow-black/10"
+                  >
+                    Register Now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScanResult(null);
+                      setScanError(null);
+                      setCheckInMessage(null);
+                      setHasOpenedUrlForScan(false);
+                      setIsScannerOpen(true);
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-4 rounded-xl border border-jogeda-dark/20 bg-white/70 text-xs font-black uppercase tracking-[0.2em] text-jogeda-dark hover:bg-jogeda-green/10 transition-colors"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Scan Conference QR
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </header>
+
+      {isScannerOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-zinc-100 relative">
+            <button
+              type="button"
+              onClick={() => setIsScannerOpen(false)}
+              className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="mb-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em] text-jogeda-green">
+                Quick Access
+              </p>
+              <h2 className="mt-1 text-2xl font-display font-black uppercase text-jogeda-dark">
+                Scan Your Conference QR
+              </h2>
+              <p className="mt-2 text-xs text-zinc-500">
+                Use this scanner to quickly access conference content, check-in points or session details via your QR code.
+              </p>
+            </div>
+            <QrScanner
+              onResult={(value) => {
+                const cleaned = value.trim();
+                setScanResult(cleaned);
+                setScanError(null);
+                setCheckInMessage(null);
+
+                if (!hasOpenedUrlForScan) {
+                  let urlToOpen: string | null = null;
+
+                  if (/^https?:\/\//i.test(cleaned)) {
+                    urlToOpen = cleaned;
+                  } else if (/^www\./i.test(cleaned)) {
+                    urlToOpen = `https://${cleaned}`;
+                  }
+
+                  if (urlToOpen) {
+                    setHasOpenedUrlForScan(true);
+
+                    try {
+                      const urlObj = new URL(urlToOpen);
+                      const cardIndex = urlObj.searchParams.get('cardIndex');
+
+                      if (cardIndex === '0') {
+                        setIsScannerOpen(false);
+                        setShowRegisteredModal(true);
+                      } else {
+                        setIsScannerOpen(false);
+                        window.location.href = urlToOpen;
+                      }
+                    } catch {
+                      // Fallback: if URL parsing fails, just navigate as-is
+                      setIsScannerOpen(false);
+                      window.location.href = urlToOpen;
+                    }
+                  }
+                }
+              }}
+              onError={(message) => {
+                setScanError(message);
+                setCheckInMessage(null);
+              }}
+              onCheckInComplete={(message) => {
+                setCheckInMessage(message);
+              }}
+            />
+            {(scanResult || scanError || checkInMessage) && (
+              <div className="mt-4 rounded-2xl border border-zinc-100 bg-zinc-50 p-3 text-xs">
+                {scanResult && (
+                  <div className="mb-1">
+                    <p className="font-black uppercase tracking-[0.18em] text-jogeda-dark">
+                      Last Scan
+                    </p>
+                    <p className="mt-1 break-all font-mono text-[11px] text-zinc-700">
+                      {scanResult}
+                    </p>
+                  </div>
+                )}
+                {checkInMessage && (
+                  <p className="mt-1 text-[11px] font-medium text-jogeda-green">
+                    {checkInMessage}
+                  </p>
+                )}
+                {scanError && (
+                  <p className="mt-1 text-[11px] font-medium text-red-500">
+                    {scanError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showRegisteredModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl border border-zinc-100 text-center relative">
+            <button
+              type="button"
+              onClick={() => setShowRegisteredModal(false)}
+              className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-jogeda-green text-jogeda-dark">
+              <CheckCircle2 className="h-10 w-10" />
+            </div>
+            <h2 className="text-2xl font-display font-black uppercase text-jogeda-dark mb-2">
+              Registered
+            </h2>
+            <p className="text-sm text-zinc-600 mb-6">
+              Your XS Card contact has been registered successfully.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowRegisteredModal(false)}
+              className="inline-flex items-center justify-center rounded-xl bg-jogeda-dark px-8 py-3 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* About Section */}
       <section className="py-24 bg-white">
@@ -206,17 +370,27 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
       {/* Priority Sectors */}
       <section className="py-24 bg-jogeda-green text-white">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.35 }}
+            transition={{ duration: 0.6, ease: 'easeOut' }}
+            className="flex flex-col md:flex-row justify-between items-end mb-16 gap-8"
+          >
             <div className="max-w-2xl">
               <span className="font-display font-bold uppercase tracking-widest text-jogeda-dark">Opportunities</span>
               <h2 className="font-display font-black text-5xl md:text-7xl uppercase leading-none mt-4">Priority <br />Investment <span className="text-jogeda-dark">Sectors</span></h2>
             </div>
-            <p className="text-jogeda-dark font-bold max-w-xs">
-              Targeted interventions to drive the agenda of inclusive economic growth.
-            </p>
-          </div>
+            <div />
+          </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <motion.div
+            variants={sectorContainer}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, amount: 0.2 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
             {[
               { title: 'Agriculture & Agro-processing', items: ['Feedlot', 'Packhouses', 'Fresh Produce Market'] },
               { title: 'Tourism & Property Development', items: ['Spa precinct revival', 'Orange River Waterfront'] },
@@ -224,21 +398,29 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
               { title: 'Industrial & Logistics', items: ['Industrial Park Development', 'Warehousing'] },
               { title: 'Mining & Beneficiation', items: ['Sandstone and Limestone value-addition'] }
             ].map((sector, i) => (
-              <div key={i} className="bg-white/10 backdrop-blur-md p-8 rounded-2xl border border-white/20 hover:bg-white/20 transition-all group">
-                <h3 className="text-xl font-bold mb-6">{sector.title}</h3>
+              <motion.div
+                key={i}
+                variants={sectorItem}
+                whileHover={{ y: -4 }}
+                transition={{ type: 'spring', stiffness: 240, damping: 20 }}
+                className="bg-white/10 backdrop-blur-md p-8 rounded-2xl border border-white/20 hover:bg-white/20 transition-colors group"
+              >
+                <h3 className="text-xl font-bold leading-tight mb-6">{sector.title}</h3>
                 <ul className="space-y-3">
                   {sector.items.map((item, j) => (
-                    <li key={j} className="flex items-center gap-2 text-sm font-medium opacity-80 group-hover:opacity-100">
-                      <div className="w-1.5 h-1.5 bg-jogeda-dark rounded-full" />
+                    <li key={j} className="flex items-center gap-2 text-sm font-medium opacity-85 group-hover:opacity-100">
+                      <div className="w-1.5 h-1.5 bg-jogeda-dark rounded-full shrink-0" />
                       {item}
                     </li>
                   ))}
                 </ul>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
+
+      <RegisterQrSection />
 
       {/* Partners Section */}
       <section className="py-24 bg-white border-t border-zinc-100">
@@ -248,10 +430,10 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
             <h2 className="section-heading">Our <span className="text-jogeda-green">Partners</span></h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-12 items-center justify-items-center opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
-            <img src="input_file_0.png" alt="Partner Logo" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="input_file_3.png" alt="Senqu Municipality" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="input_file_4.png" alt="Elundini Municipality" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="input_file_5.png" alt="Walter Sisulu Municipality" className="h-20 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/9.png" alt="Partner Logo 1" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/10.png" alt="Partner Logo 2" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/11.png" alt="Partner Logo 3" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/12.png" alt="Partner Logo 4" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
           </div>
         </div>
       </section>
@@ -323,14 +505,21 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
 };
 
 // --- REGISTRATION FORM ---
-export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+interface RegistrationFormProps {
+  onBack: () => void;
+  hideStep4?: boolean;
+}
+
+export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hideStep4 }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showCodeOfConduct, setShowCodeOfConduct] = useState(false);
   
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
     preferredName: '',
     title: '',
     organisation: '',
@@ -344,10 +533,46 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
     photographyConsent: false,
     headshot: null as File | null
   });
+  const [password, setPassword] = useState('');
+
+  const [generatedPassword] = useState(
+    () =>
+      Math.random().toString(36).slice(-8) +
+      '!' +
+      Math.random().toString(36).slice(-3).toUpperCase()
+  );
+
+  const apiBaseUrl =
+    (import.meta as any).env?.VITE_BASE_URL ||
+    (import.meta as any).env?.BASE_URL ||
+    (typeof process !== 'undefined' ? (process as any).env?.BASE_URL : '') ||
+    'https://baseurl.xscard.co.za';
+
+  const conferenceCode =
+    (import.meta as any).env?.VITE_CONFERENCE_CODE ||
+    (import.meta as any).env?.CONFERENCE_CODE ||
+    (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '') ||
+    'EC2026';
+
+  type DeviceType = 'android' | 'ios' | 'desktop';
+
+  const getDeviceType = (): DeviceType => {
+    if (typeof navigator === 'undefined') return 'desktop';
+    const ua = navigator.userAgent || (navigator as any).vendor || '';
+
+    if (/android/i.test(ua)) return 'android';
+    if (/iPad|iPhone|iPod/.test(ua)) return 'ios';
+
+    return 'desktop';
+  };
+
+  const deviceType = getDeviceType();
+
+  const totalSteps = hideStep4 ? 3 : 4;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step < 3) {
+    if (step < totalSteps) {
       setStep(step + 1);
       return;
     }
@@ -356,26 +581,24 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
     setError(null);
 
     try {
-      // In a real app, we'd use FormData for file uploads
-      // For this demo, we'll simulate the payload structure
+      const nameForBackend =
+        `${formData.firstName} ${formData.lastName}`.trim() || formData.preferredName;
+      const surnameForBackend = formData.lastName || '';
+
       const payload = {
-        name: formData.fullName,
-        preferredName: formData.preferredName,
-        title: formData.title,
-        organisation: formData.organisation,
+        name: nameForBackend,
+        surname: surnameForBackend,
         email: formData.email,
+        password: generatedPassword,
+        conferenceCode,
+        title: formData.title,
+        company: formData.organisation,
         phone: formData.phone,
-        bio: formData.bio,
-        investmentFocus: formData.investmentFocus,
-        linkedinWebsite: formData.linkedinWebsite,
-        photoConsent: formData.photoConsent,
-        codeOfConduct: formData.codeOfConduct,
-        photographyConsent: formData.photographyConsent,
-        termsAccepted: formData.codeOfConduct, // Mapping for backend consistency
-        privacyAccepted: formData.photographyConsent // Mapping for backend consistency
+        termsAccepted: formData.codeOfConduct,
+        privacyAccepted: formData.photographyConsent
       };
 
-      const response = await fetch('https://baseurl.xscard.co.za/AddUser', {
+      const response = await fetch(`${apiBaseUrl}/AddUser`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -423,6 +646,90 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
     );
   }
 
+  if (showCodeOfConduct) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6 font-sans">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="w-full max-w-3xl bg-white p-8 md:p-16 rounded-[2rem] shadow-2xl border border-zinc-100"
+        >
+          <button
+            onClick={() => setShowCodeOfConduct(false)}
+            className="mb-8 flex items-center gap-2 text-sm font-bold text-zinc-400 hover:text-jogeda-green transition-colors uppercase tracking-widest"
+          >
+            <ArrowRight className="w-4 h-4 rotate-180" /> Back to registration
+          </button>
+
+          <h2 className="text-3xl md:text-4xl font-display font-black uppercase text-jogeda-dark leading-tight mb-6">
+            Event Code of Conduct
+          </h2>
+          <p className="text-zinc-600 mb-8 leading-relaxed">
+            To ensure a safe, professional and productive environment for all attendees, partners and staff, all delegates are
+            required to adhere to the following Code of Conduct throughout the Joe Gqabi Investment Conference.
+          </p>
+
+          <ul className="space-y-4 text-sm text-zinc-700">
+            <li>
+              <span className="font-bold text-jogeda-green uppercase tracking-widest text-[11px]">Professional Behaviour</span>
+              <p className="mt-1">
+                Treat all delegates, speakers, service providers and staff with courtesy, respect and professionalism at all times.
+                Harassment, discrimination, intimidation or any form of abusive behaviour will not be tolerated.
+              </p>
+            </li>
+            <li>
+              <span className="font-bold text-jogeda-green uppercase tracking-widest text-[11px]">Safe Environment</span>
+              <p className="mt-1">
+                Follow all venue, safety and security rules. Obey instructions from event organisers, security personnel and venue
+                management, especially in relation to health, safety and emergency procedures.
+              </p>
+            </li>
+            <li>
+              <span className="font-bold text-jogeda-green uppercase tracking-widest text-[11px]">Confidentiality & Privacy</span>
+              <p className="mt-1">
+                Respect the confidentiality of commercial information shared during sessions and bilateral meetings. Do not record,
+                photograph or distribute sensitive information without explicit permission.
+              </p>
+            </li>
+            <li>
+              <span className="font-bold text-jogeda-green uppercase tracking-widest text-[11px]">Responsible Networking</span>
+              <p className="mt-1">
+                Engage in constructive and ethical networking. Aggressive solicitation, inappropriate advances or disruptive
+                marketing activities are prohibited.
+              </p>
+            </li>
+            <li>
+              <span className="font-bold text-jogeda-green uppercase tracking-widest text-[11px]">Alcohol & Substances</span>
+              <p className="mt-1">
+                Consume alcohol responsibly at official functions and do not engage in any illegal substance use. Behaviour
+                impaired by alcohol or substances that affects the safety or comfort of others will lead to removal from the event.
+              </p>
+            </li>
+            <li>
+              <span className="font-bold text-jogeda-green uppercase tracking-widest text-[11px]">Respect for Programme & Venue</span>
+              <p className="mt-1">
+                Honour the formal programme, time allocations and speaking opportunities. Respect the venue facilities, equipment
+                and staff, and report any damage or incidents immediately to the organisers.
+              </p>
+            </li>
+            <li>
+              <span className="font-bold text-jogeda-green uppercase tracking-widest text-[11px]">Non‑Compliance</span>
+              <p className="mt-1">
+                The organisers reserve the right to take appropriate action, including removal from the event without refund, for
+                any behaviour that breaches this Code of Conduct.
+              </p>
+            </li>
+          </ul>
+
+          <p className="text-xs text-zinc-500 uppercase tracking-[0.2em] font-bold mt-8">
+            By proceeding with your registration, you confirm that you have read, understood and agree to abide by this Code of
+            Conduct.
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-6 font-sans">
       <motion.div 
@@ -437,18 +744,30 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
         <div className="mb-12">
           <div className="flex items-center gap-4 mb-6">
             <span className="bg-jogeda-green text-jogeda-dark px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded">
-              Section {step} of 3
+              Section {step} of {totalSteps}
             </span>
             <div className="flex gap-2 flex-1">
-              {[1, 2, 3].map(i => (
+              {Array.from({ length: totalSteps }, (_v, i) => i + 1).map(i => (
                 <div key={i} className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-jogeda-green' : 'bg-zinc-100'}`} />
               ))}
             </div>
           </div>
           <h2 className="text-4xl font-display font-black uppercase text-jogeda-dark leading-none">
-            {step === 1 ? 'Delegate Details' : step === 2 ? 'Professional Profile' : 'Media & Consent'}
+            {step === 1
+              ? 'Delegate Details'
+              : step === 2
+              ? 'Professional Profile'
+              : step === 3
+              ? 'Media & Consent'
+              : 'Get the XS Card App'}
           </h2>
-          <p className="text-zinc-500 mt-2 font-medium">Joe Gqabi Investment Conference 2026 Registration</p>
+          <p className="text-zinc-500 mt-2 font-medium">
+            Joe Gqabi Investment Conference 2026 Registration
+          </p>
+          <p className="mt-1 text-[11px] text-zinc-500 font-medium">
+            Completing this form will also create your XS Card digital profile for networking and
+            event communications.
+          </p>
         </div>
 
         {error && (
@@ -467,18 +786,34 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Full Name (as it should appear on name tag) *</label>
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
-                    <input 
-                      required
-                      type="text" 
-                      placeholder="e.g. John Smith"
-                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
-                      value={formData.fullName}
-                      onChange={e => setFormData({...formData, fullName: e.target.value})}
-                    />
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">First Name *</label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
+                      <input 
+                        required
+                        type="text" 
+                        placeholder="e.g. John"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        value={formData.firstName}
+                        onChange={e => setFormData({...formData, firstName: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Last Name *</label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
+                      <input 
+                        required
+                        type="text" 
+                        placeholder="e.g. Smith"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        value={formData.lastName}
+                        onChange={e => setFormData({...formData, lastName: e.target.value})}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -525,7 +860,22 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                       />
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Password *</label>
+                    <div className="relative">
+                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
+                      <input 
+                        required
+                        type="password" 
+                        placeholder="Create a secure password"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
+
 
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -585,18 +935,26 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Primary Investment Focus *</label>
                   <div className="relative">
                     <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
-                    <input 
+                    <select
                       required
-                      type="text" 
-                      placeholder="e.g. Renewable Energy, Agriculture"
-                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold appearance-none"
                       value={formData.investmentFocus}
-                      onChange={e => setFormData({...formData, investmentFocus: e.target.value})}
-                    />
+                      onChange={e => setFormData({ ...formData, investmentFocus: e.target.value })}
+                    >
+                      <option value="" disabled>
+                        Select your primary investment focus
+                      </option>
+                      <option value="Agriculture & Agro-processing">Agriculture &amp; Agro-processing</option>
+                      <option value="Tourism & Property Development">Tourism &amp; Property Development</option>
+                      <option value="Renewable Energy">Renewable Energy</option>
+                      <option value="Industrial & Logistics">Industrial &amp; Logistics</option>
+                      <option value="Mining & Beneficiation">Mining &amp; Beneficiation</option>
+                      <option value="Other">Other / Cross-cutting Investments</option>
+                    </select>
                   </div>
                 </div>
               </motion.div>
-            ) : (
+            ) : step === 3 ? (
               <motion.div 
                 key="step3"
                 initial={{ opacity: 0, x: 20 }}
@@ -605,7 +963,7 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                 className="space-y-6"
               >
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Upload Professional Headshot *</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Upload Professional Headshot (optional)</label>
                   <div className="flex items-center justify-center w-full">
                     <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-zinc-200 border-dashed rounded-xl cursor-pointer bg-zinc-50 hover:bg-zinc-100 transition-all">
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -614,11 +972,10 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                           {formData.headshot ? formData.headshot.name : 'Click to upload (JPG/PNG)'}
                         </p>
                       </div>
-                      <input 
-                        type="file" 
-                        className="hidden" 
+                      <input
+                        type="file"
+                        className="hidden"
                         accept="image/*"
-                        required={!formData.headshot}
                         onChange={e => setFormData({...formData, headshot: e.target.files?.[0] || null})}
                       />
                     </label>
@@ -630,7 +987,6 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                     <div className="relative flex items-center mt-1">
                       <input 
                         type="checkbox" 
-                        required
                         className="peer h-5 w-5 cursor-pointer appearance-none rounded border border-zinc-200 bg-zinc-50 transition-all checked:bg-jogeda-green checked:border-jogeda-green"
                         checked={formData.photoConsent}
                         onChange={e => setFormData({...formData, photoConsent: e.target.checked})}
@@ -638,7 +994,7 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                       <CheckCircle2 className="absolute h-3.5 w-3.5 text-jogeda-dark opacity-0 peer-checked:opacity-100 left-0.5 top-0.5 pointer-events-none" />
                     </div>
                     <span className="text-xs text-zinc-600 font-medium">
-                      I approve the use of this photo for my badge, lanyard and attendee directory. *
+                      I approve the use of this photo for my badge, lanyard and attendee directory.
                     </span>
                   </label>
                 </div>
@@ -670,7 +1026,15 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                       <CheckCircle2 className="absolute h-3.5 w-3.5 text-jogeda-dark opacity-0 peer-checked:opacity-100 left-0.5 top-0.5 pointer-events-none" />
                     </div>
                     <span className="text-xs text-zinc-600 font-medium">
-                      I agree to the <a href="#" className="text-jogeda-green font-bold hover:underline">Event Code of Conduct</a> *
+                      I agree to the{' '}
+                      <button
+                        type="button"
+                        onClick={() => setShowCodeOfConduct(true)}
+                        className="text-jogeda-green font-bold hover:underline"
+                      >
+                        Event Code of Conduct
+                      </button>{' '}
+                      *
                     </span>
                   </label>
 
@@ -691,23 +1055,114 @@ export const RegistrationForm: React.FC<{ onBack: () => void }> = ({ onBack }) =
                   </label>
                 </div>
               </motion.div>
+            ) : (
+              <motion.div
+                key="step4"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8"
+              >
+                <div className="space-y-3">
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-jogeda-green">
+                    Optional but strongly recommended
+                  </p>
+                  <p className="text-sm text-zinc-600">
+                    Install the XS Card app to manage your delegate profile, networking, meetings and event updates in real time.
+                  </p>
+                </div>
+
+                {deviceType === 'desktop' && (
+                  <div className="flex flex-col items-center justify-center gap-6 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-8 py-10">
+                    <div className="w-40 h-40 bg-white rounded-2xl border border-zinc-200 flex items-center justify-center relative overflow-hidden">
+                      <div className="absolute inset-3 grid grid-cols-3 grid-rows-3 gap-1 opacity-40">
+                        <div className="bg-zinc-900" />
+                        <div className="bg-zinc-300" />
+                        <div className="bg-zinc-700" />
+                        <div className="bg-zinc-500" />
+                        <div className="bg-zinc-900" />
+                        <div className="bg-zinc-400" />
+                        <div className="bg-zinc-800" />
+                        <div className="bg-zinc-200" />
+                        <div className="bg-zinc-600" />
+                      </div>
+                      <span className="relative z-10 text-[10px] font-black uppercase tracking-[0.25em] text-zinc-700">
+                        Scan Me
+                      </span>
+                    </div>
+                    <p className="text-center text-sm text-zinc-600 max-w-sm">
+                      Point your phone&rsquo;s camera at this sample QR code to download XS Card on your device from the relevant
+                      app store.
+                    </p>
+                  </div>
+                )}
+
+                {deviceType === 'android' && (
+                  <div className="space-y-6 rounded-2xl border border-jogeda-green/40 bg-jogeda-green/5 px-6 py-8">
+                    <p className="text-sm text-zinc-700">
+                      You are using an Android device. Install the XS Card app now to complete your profile, receive updates and
+                      network with other delegates.
+                    </p>
+                    <a
+                      href="https://play.google.com/store/apps/details?id=com.p.zzles.xscard"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center rounded-xl bg-jogeda-green px-6 py-3 text-xs font-black uppercase tracking-[0.25em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
+                    >
+                      Open in Google Play
+                    </a>
+                  </div>
+                )}
+
+                {deviceType === 'ios' && (
+                  <div className="space-y-6 rounded-2xl border border-jogeda-green/40 bg-jogeda-green/5 px-6 py-8">
+                    <p className="text-sm text-zinc-700">
+                      You are using an iOS device. Install the XS Card app to keep your delegate details handy, access your
+                      tickets and stay in sync with the programme.
+                    </p>
+                    <a
+                      href="https://apps.apple.com/us/app/xs-card/id6742452317"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center rounded-xl bg-jogeda-green px-6 py-3 text-xs font-black uppercase tracking-[0.25em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
+                    >
+                      Open in App Store
+                    </a>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  You can proceed without installing the app, but we recommend completing this step to unlock the full digital
+                  conference experience.
+                </p>
+              </motion.div>
             )}
           </AnimatePresence>
 
-          <button 
-            type="submit"
-            disabled={loading}
-            className="w-full py-5 bg-jogeda-dark text-white rounded-xl font-display font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-jogeda-green transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                {step < 3 ? 'Continue' : 'Complete Registration'}
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </>
-            )}
-          </button>
+          <div className="flex items-center justify-between gap-4 pt-2">
+            <button
+              type="button"
+              disabled={loading || step === 1}
+              onClick={() => setStep(prev => Math.max(1, prev - 1))}
+              className="px-6 py-4 rounded-xl border border-zinc-200 text-xs font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Previous Section
+            </button>
+            <button 
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-5 bg-jogeda-dark text-white rounded-xl font-display font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-jogeda-green transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  {step < totalSteps ? 'Continue' : 'Complete Registration'}
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
+            </button>
+          </div>
         </form>
       </motion.div>
     </div>
