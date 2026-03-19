@@ -110,39 +110,9 @@ export const QrScanner: React.FC<QrScannerProps> = ({
           const value = result.data;
           onResult(value);
 
+          // Delegate check-in side-effects to the parent; this component is now purely visual + decode.
           if (onCheckInComplete) {
-            const proxyPort =
-              (import.meta as any).env?.VITE_PROXY_PORT ||
-              (typeof process !== 'undefined' ? (process as any).env?.VITE_PROXY_PORT : '');
-            const apiBase =
-              typeof window !== 'undefined'
-                ? proxyPort
-                  ? window.location.origin.replace(/:\d+$/, `:${proxyPort}`)
-                  : window.location.origin
-                : `http://localhost:${proxyPort || '4000'}`;
-
-            fetch(`${apiBase}/api/checkin`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ code: value }),
-            })
-              .then(async (res) => {
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                  throw new Error((data as any).message || 'Check-in failed');
-                }
-                onCheckInComplete(
-                  (data as any).message || 'QR code received successfully.'
-                );
-              })
-              .catch((err) => {
-                console.error('QR backend error:', err);
-                onError?.(
-                  'We could read the QR code but could not reach the check-in service. Please try again or contact support.'
-                );
-              });
+            onCheckInComplete('QR code scanned successfully.');
           }
         }
       };

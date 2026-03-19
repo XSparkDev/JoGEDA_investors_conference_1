@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 
 dotenv.config();
 
@@ -22,7 +23,7 @@ app.use((req, res, next) => {
   }
 });
 
-// --- Database setup ---
+// --- Local SQLite setup (legacy/demo) ---
 const dbPath = path.join(process.cwd(), 'data', 'attendees.db');
 
 // Ensure the directory for the SQLite DB exists
@@ -100,26 +101,27 @@ if (existingCount.count === 0) {
   insertMany(seedAttendees);
 }
 
-// --- Routes ---
+// --- Supabase admin client ---
+const supabaseUrl =
+  process.env.SUPABASE_URL ||
+  process.env.VITE_SUPABASE_URL ||
+  '';
+const supabaseServiceRoleKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  '';
 
-app.get('/api/attendees', (_req, res) => {
-  try {
-    const rows = db
-      .prepare(
-        `
-        SELECT id, name, email, organisation, phone, investmentFocus, createdAt
-        FROM attendees
-        ORDER BY datetime(createdAt) DESC;
-      `.trim()
-      )
-      .all();
+const supabaseAdmin =
+  supabaseUrl && supabaseServiceRoleKey
+    ? createClient(supabaseUrl, supabaseServiceRoleKey)
+    : null;
 
-    res.json({ attendees: rows });
-  } catch (err) {
-    console.error('Failed to list attendees', err);
-    res.status(500).json({ message: 'Failed to load attendees.' });
-  }
-});
+if (!supabaseAdmin) {
+  console.warn(
+    '[supabase] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not fully configured. ' +
+      'Registration mirroring will be disabled until these are set.'
+  );
+}
 
 // --- Static app hosting (serves Vite build) ---
 const distDir = path.join(process.cwd(), 'dist');
@@ -128,84 +130,6 @@ const indexHtmlPath = path.join(distDir, 'index.html');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
 }
-
-app.post('/api/checkin', (req, res) => {
-  const { code } = req.body as { code?: string };
-
-  if (!code) {
-    return res.status(400).json({ ok: false, message: 'Missing QR code payload.' });
-  }
-
-  console.log('Received QR scan code:', code);
-
-  return res.json({
-    ok: true,
-    message: 'QR code received.',
-    code,
-  });
-});
-
-app.get('/api/conference/user-status/:uid', async (req, res) => {
-  const { uid } = req.params;
-  const baseUrl =
-    process.env.BASE_URL ||
-    process.env.STATUS_BASE_URL ||
-    process.env.VITE_BASE_URL;
-  const apiKey =
-    process.env.CONFERENCE_API_KEY ||
-    process.env.VITE_CONFERENCE_API_KEY;
-
-  if (!apiKey) {
-    console.error('[status-proxy] Missing CONFERENCE_API_KEY/VITE_CONFERENCE_API_KEY in environment', {
-      hasCONFERENCE_API_KEY: !!process.env.CONFERENCE_API_KEY,
-      hasVITE_CONFERENCE_API_KEY: !!process.env.VITE_CONFERENCE_API_KEY,
-    });
-    return res.status(500).json({ message: 'CONFERENCE_API_KEY or VITE_CONFERENCE_API_KEY not configured on server.' });
-  }
-
-  try {
-    console.log('[status-proxy] Outbound request', {
-      uid,
-      baseUrl,
-      hasApiKey: !!apiKey,
-      url: `${baseUrl}/api/conference/user-status/${encodeURIComponent(uid)}`,
-    });
-
-    const upstream = await fetch(
-      `${baseUrl}/api/conference/user-status/${encodeURIComponent(uid)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      }
-    );
-
-    console.log('[status-proxy] Upstream response status', upstream.status);
-
-    const text = await upstream.text();
-    let data: any = {};
-
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch (err) {
-      console.warn('[status-proxy] Failed to parse upstream JSON, returning raw text snippet');
-      data = { raw: text.slice(0, 200) };
-    }
-
-    if (!upstream.ok) {
-      console.error('[status-proxy] Upstream error', {
-        status: upstream.status,
-        bodyPreview: typeof data === 'string' ? data.slice(0, 200) : data,
-      });
-      return res.status(upstream.status).json(data || { message: 'Upstream error' });
-    }
-
-    return res.json(data);
-  } catch (err) {
-    console.error('[status-proxy] Proxy status check failed', err);
-    return res.status(502).json({ message: 'Failed to contact status service.' });
-  }
-});
 
 // SPA fallback for client-side routes (ignore API routes)
 app.get('*', (req, res) => {

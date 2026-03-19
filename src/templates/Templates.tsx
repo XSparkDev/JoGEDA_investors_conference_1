@@ -554,6 +554,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
     (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '') ||
     'EC2026';
 
+  const supabaseFunctionsBaseUrl =
+    (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
+    '';
+
   type DeviceType = 'android' | 'ios' | 'desktop';
 
   const getDeviceType = (): DeviceType => {
@@ -608,6 +613,43 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
       const data = await response.json();
 
       if (response.ok) {
+        // Fire-and-forget mirror into Supabase via Edge Function, only after XS success
+        if (supabaseFunctionsBaseUrl) {
+          const mirrorPayload = {
+            xsPayload: payload,
+            extended: {
+              conferenceCode,
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              preferredName: formData.preferredName,
+              title: formData.title,
+              organisation: formData.organisation,
+              email: formData.email,
+              phone: formData.phone,
+              bio: formData.bio,
+              investmentFocus: formData.investmentFocus,
+              linkedinWebsite: formData.linkedinWebsite,
+              photoConsent: formData.photoConsent,
+              codeOfConduct: formData.codeOfConduct,
+              photographyConsent: formData.photographyConsent,
+            },
+          };
+
+          try {
+            void fetch(`${supabaseFunctionsBaseUrl}/mirror-registration`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(mirrorPayload),
+            }).catch((mirrorErr) => {
+              console.warn('Supabase mirror failed (non-blocking):', mirrorErr);
+            });
+          } catch (mirrorErr) {
+            console.warn('Supabase mirror failed (non-blocking):', mirrorErr);
+          }
+        }
+
         setSuccess(true);
       } else {
         setError(data.message || 'Registration failed. Please try again.');

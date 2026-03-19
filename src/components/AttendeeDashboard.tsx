@@ -71,29 +71,29 @@ export function AttendeeDashboard() {
     title: string;
     body: string;
   } | null>(null);
+  const supabaseFunctionsBaseUrl =
+    (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
+    '';
 
-  const proxyPort =
-    (import.meta as any).env?.VITE_PROXY_PORT ||
-    (typeof process !== 'undefined' ? (process as any).env?.VITE_PROXY_PORT : '');
-
-  const statusApiBase =
-    typeof window !== 'undefined'
-      ? proxyPort
-        ? window.location.origin.replace(/:\d+$/, `:${proxyPort}`)
-        : window.location.origin
-      : `http://localhost:${proxyPort || '4000'}`;
+  const conferenceCode =
+    (import.meta as any).env?.VITE_CONFERENCE_CODE ||
+    (import.meta as any).env?.CONFERENCE_CODE ||
+    (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '') ||
+    'EC2026';
 
   const fetchAttendees = async () => {
     setLoading(true);
     setError(null);
     try {
-      const apiBase =
-        typeof window !== 'undefined'
-          ? proxyPort
-            ? window.location.origin.replace(/:\d+$/, `:${proxyPort}`)
-            : window.location.origin
-          : `http://localhost:${proxyPort || '4000'}`;
-      const res = await fetch(`${apiBase}/api/attendees`);
+      if (!supabaseFunctionsBaseUrl) {
+        throw new Error('Supabase functions base URL is not configured.');
+      }
+
+      const url = new URL(`${supabaseFunctionsBaseUrl}/list-attendees`);
+      url.searchParams.set('conferenceCode', conferenceCode);
+
+      const res = await fetch(url.toString());
       if (!res.ok) {
         throw new Error('Failed to load attendees');
       }
@@ -486,9 +486,15 @@ export function AttendeeDashboard() {
                   setScanMessage(null);
                   setHasOpenedUrlForScan(true);
 
-                  // Extract uid from scanned URL and call conference status API
+                  // Extract uid from scanned URL and call Supabase check-in Edge Function
                   (async () => {
                     try {
+                      if (!supabaseFunctionsBaseUrl) {
+                        setScanError('Supabase functions URL is not configured.');
+                        setScanMessage(null);
+                        return;
+                      }
+
                       let urlText = cleaned;
                       if (!/^https?:\/\//i.test(urlText)) {
                         urlText = `https://${urlText}`;
@@ -505,72 +511,71 @@ export function AttendeeDashboard() {
                       setScanMessage('Checking delegate status...');
 
                       const res = await fetch(
-                        `${statusApiBase}/api/conference/user-status/${encodeURIComponent(
-                          userId
-                        )}`
+                        `${supabaseFunctionsBaseUrl}/checkin-attendee`,
+                        {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            uid: userId,
+                            conferenceCode,
+                          }),
+                        }
                       );
 
                       if (!res.ok) {
-                        setScanError('Unable to verify delegate status.');
+                        let errBody: any = {};
+                        try {
+                          errBody = await res.json();
+                        } catch {
+                          // ignore
+                        }
+                        const reason = errBody.reason as string | undefined;
+                        if (reason === 'not_registered' || reason === 'registration_not_found') {
+                          setScanError('No delegate found for this QR code.');
+                          setScanMessage(null);
+                          setScannerOpen(false);
+                          setToast({
+                            type: 'error',
+                            title: 'Not Registered',
+                            body: 'We could not find a delegate linked to this QR code.',
+                          });
+                        } else if (reason === 'not_allowed') {
+                          setScanError('Delegate found but not allowed for this conference.');
+                          setScanMessage(null);
+                          setScannerOpen(false);
+                          setToast({
+                            type: 'error',
+                            title: 'Not Allowed',
+                            body: 'This delegate is not allowed for this conference.',
+                          });
+                        } else {
+                          setScanError('Unable to verify delegate status.');
+                          setScanMessage(null);
+                          setScannerOpen(false);
+                          setToast({
+                            type: 'error',
+                            title: 'Check-in Error',
+                            body: 'There was an unexpected response while checking this QR code.',
+                          });
+                        }
                         setScanMessage(null);
-                        setScannerOpen(false);
-                        setToast({
-                          type: 'error',
-                          title: 'Not Registered',
-                          body: 'We could not verify this delegate for the conference.',
-                        });
                         return;
                       }
 
-                      let data: any;
-                      try {
-                        data = await res.json();
-                      } catch {
-                        setScanError('Status service did not return valid JSON.');
-                        setScanMessage(null);
-                        return;
-                      }
-                      const success = Boolean(data.success);
-                      const found = Boolean(data.found);
-                      const allowed = Boolean(data.allowed);
+                      // Success: delegate checked in
+                      setScanMessage(null);
+                      setScanError(null);
+                      setScannerOpen(false);
+                      setToast({
+                        type: 'success',
+                        title: 'Checked In',
+                        body: 'This delegate has been checked in successfully.',
+                      });
 
-                      if (success && found && allowed) {
-                        setScanMessage(null);
-                        setScanError(null);
-                        setScannerOpen(false);
-                        setToast({
-                          type: 'success',
-                          title: 'Registered',
-                          body: 'This delegate is registered and allowed for this conference.',
-                        });
-                      } else if (success && found && !allowed) {
-                        setScanError('Delegate found but not allowed for this conference.');
-                        setScanMessage(null);
-                        setScannerOpen(false);
-                        setToast({
-                          type: 'error',
-                          title: 'Not Allowed',
-                          body: 'This delegate is not allowed for this conference.',
-                        });
-                      } else if (success && !found) {
-                        setScanError('No delegate found for this QR code.');
-                        setScanMessage(null);
-                        setScannerOpen(false);
-                        setToast({
-                          type: 'error',
-                          title: 'Not Registered',
-                          body: 'We could not find a delegate linked to this QR code.',
-                        });
-                      } else {
-                        setScanError('Unexpected response from status service.');
-                        setScanMessage(null);
-                        setScannerOpen(false);
-                        setToast({
-                          type: 'error',
-                          title: 'Check-in Error',
-                          body: 'There was an unexpected response while checking this QR code.',
-                        });
-                      }
+                      // Refresh attendees to reflect updated check-in state
+                      fetchAttendees();
                     } catch (err) {
                       console.error('Status check failed', err);
                       setScanError('Failed to contact status service.');
