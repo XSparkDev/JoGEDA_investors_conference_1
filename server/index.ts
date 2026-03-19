@@ -121,6 +121,14 @@ app.get('/api/attendees', (_req, res) => {
   }
 });
 
+// --- Static app hosting (serves Vite build) ---
+const distDir = path.join(process.cwd(), 'dist');
+const indexHtmlPath = path.join(distDir, 'index.html');
+
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+}
+
 app.post('/api/checkin', (req, res) => {
   const { code } = req.body as { code?: string };
 
@@ -197,6 +205,17 @@ app.get('/api/conference/user-status/:uid', async (req, res) => {
     console.error('[status-proxy] Proxy status check failed', err);
     return res.status(502).json({ message: 'Failed to contact status service.' });
   }
+});
+
+// SPA fallback for client-side routes (ignore API routes)
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).end();
+  if (!fs.existsSync(indexHtmlPath)) {
+    return res
+      .status(404)
+      .send('App build not found. Run `npm run build` to generate the static files.');
+  }
+  return res.sendFile(indexHtmlPath);
 });
 
 app.listen(port, () => {
