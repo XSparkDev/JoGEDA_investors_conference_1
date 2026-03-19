@@ -111,10 +111,15 @@ export const QrScanner: React.FC<QrScannerProps> = ({
           onResult(value);
 
           if (onCheckInComplete) {
+            const proxyPort =
+              (import.meta as any).env?.VITE_PROXY_PORT ||
+              (typeof process !== 'undefined' ? (process as any).env?.VITE_PROXY_PORT : '');
             const apiBase =
               typeof window !== 'undefined'
-                ? window.location.origin.replace(/:\d+$/, ':4000')
-                : 'http://localhost:4000';
+                ? proxyPort
+                  ? window.location.origin.replace(/:\d+$/, `:${proxyPort}`)
+                  : window.location.origin
+                : `http://localhost:${proxyPort || '4000'}`;
 
             fetch(`${apiBase}/api/checkin`, {
               method: 'POST',

@@ -72,10 +72,16 @@ export function AttendeeDashboard() {
     body: string;
   } | null>(null);
 
+  const proxyPort =
+    (import.meta as any).env?.VITE_PROXY_PORT ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_PROXY_PORT : '');
+
   const statusApiBase =
     typeof window !== 'undefined'
-      ? window.location.origin.replace(/:\d+$/, ':4000')
-      : 'http://localhost:4000';
+      ? proxyPort
+        ? window.location.origin.replace(/:\d+$/, `:${proxyPort}`)
+        : window.location.origin
+      : `http://localhost:${proxyPort || '4000'}`;
 
   const fetchAttendees = async () => {
     setLoading(true);
@@ -83,8 +89,10 @@ export function AttendeeDashboard() {
     try {
       const apiBase =
         typeof window !== 'undefined'
-          ? window.location.origin.replace(/:\d+$/, ':4000')
-          : 'http://localhost:4000';
+          ? proxyPort
+            ? window.location.origin.replace(/:\d+$/, `:${proxyPort}`)
+            : window.location.origin
+          : `http://localhost:${proxyPort || '4000'}`;
       const res = await fetch(`${apiBase}/api/attendees`);
       if (!res.ok) {
         throw new Error('Failed to load attendees');
