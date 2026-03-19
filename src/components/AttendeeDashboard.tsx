@@ -7,6 +7,7 @@ type Attendee = {
   id: number | string;
   name: string;
   email: string;
+  xsUserId?: string;
   organisation?: string;
   phone?: string;
   investmentFocus?: string;
@@ -71,9 +72,15 @@ export function AttendeeDashboard() {
     title: string;
     body: string;
   } | null>(null);
+
+  const [openActionForId, setOpenActionForId] = useState<string | number | null>(null);
   const supabaseFunctionsBaseUrl =
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
+    '';
+  const supabaseAnonKey =
+    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_ANON_KEY : '') ||
     '';
 
   const conferenceCode =
@@ -81,6 +88,22 @@ export function AttendeeDashboard() {
     (import.meta as any).env?.CONFERENCE_CODE ||
     (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '') ||
     'EC2026';
+
+  const xsApiBaseUrl =
+    (import.meta as any).env?.VITE_BASE_URL ||
+    (import.meta as any).env?.BASE_URL ||
+    '';
+
+  const conferenceApiKey =
+    (import.meta as any).env?.VITE_CONFERENCE_API_KEY ||
+    (import.meta as any).env?.CONFERENCE_API_KEY ||
+    '';
+
+  const verifyEndpointUrl =
+    (import.meta as any).env?.VITE_VERIFY_ENDPOINT_URL ||
+    (import.meta as any).env?.VITE_VERIFY_ENDPOINT_PATH
+      ? `${xsApiBaseUrl}${(import.meta as any).env?.VITE_VERIFY_ENDPOINT_PATH}`
+      : '';
 
   const fetchAttendees = async () => {
     setLoading(true);
@@ -93,7 +116,16 @@ export function AttendeeDashboard() {
       const url = new URL(`${supabaseFunctionsBaseUrl}/list-attendees`);
       url.searchParams.set('conferenceCode', conferenceCode);
 
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), {
+        headers: {
+          ...(supabaseAnonKey
+            ? {
+                apikey: supabaseAnonKey,
+                Authorization: `Bearer ${supabaseAnonKey}`,
+              }
+            : {}),
+        },
+      });
       if (!res.ok) {
         throw new Error('Failed to load attendees');
       }
@@ -430,24 +462,206 @@ export function AttendeeDashboard() {
                       {attendee.status ?? 'Registered'}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-right">
-                      <button
-                        type="button"
-                        disabled={attendee.status === 'Confirmed'}
-                        onClick={() =>
-                          setAttendees((prev) =>
-                            prev.map((a) =>
-                              a.id === attendee.id ? { ...a, status: 'Confirmed' } : a
+                      <div className="relative inline-flex justify-end">
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white/80 hover:bg-zinc-50 transition-colors"
+                          onClick={() =>
+                            setOpenActionForId((prev) =>
+                              prev === attendee.id ? null : attendee.id,
                             )
-                          )
-                        }
-                        className={`inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${
-                          attendee.status === 'Confirmed'
-                            ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 cursor-default'
-                            : 'bg-jogeda-dark text-white hover:bg-jogeda-green hover:text-jogeda-dark border border-jogeda-dark/40'
-                        }`}
-                      >
-                        {attendee.status === 'Confirmed' ? 'Confirmed' : 'Confirm'}
-                      </button>
+                          }
+                          aria-label="Open actions"
+                        >
+                          ⋯
+                        </button>
+
+                        {openActionForId === attendee.id && (
+                          <div className="absolute right-0 mt-2 w-44 rounded-xl border border-zinc-200 bg-white shadow-lg z-20 overflow-hidden">
+                            <button
+                              type="button"
+                              disabled={attendee.status === 'Confirmed' || !attendee.xsUserId}
+                              className={`w-full px-3 py-2 text-left text-xs font-black uppercase tracking-[0.18em] transition-colors ${
+                                attendee.status === 'Confirmed' || !attendee.xsUserId
+                                  ? 'text-zinc-400 cursor-default bg-zinc-50'
+                                  : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white'
+                              }`}
+                              onClick={() => {
+                                (async () => {
+                                  setOpenActionForId(null);
+                                  try {
+                                    if (!verifyEndpointUrl) {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Verify Not Configured',
+                                        body: 'Set VITE_VERIFY_ENDPOINT_URL (or VITE_VERIFY_ENDPOINT_PATH).',
+                                      });
+                                      return;
+                                    }
+
+                                    const res = await fetch(verifyEndpointUrl, {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        ...(conferenceApiKey
+                                          ? {
+                                              Authorization: `Bearer ${conferenceApiKey}`,
+                                            }
+                                          : {}),
+                                      },
+                                      body: JSON.stringify({
+                                        uid: attendee.xsUserId,
+                                        email: attendee.email,
+                                      }),
+                                    });
+
+                                    const data = await res
+                                      .json()
+                                      .catch(() => ({} as any));
+
+                                    const isEmailVerified = Boolean(
+                                      (data as any).isEmailVerified,
+                                    );
+
+                                    if (!res.ok || !isEmailVerified) {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Verify Failed',
+                                        body:
+                                          (data &&
+                                            (data.message as string | undefined)) ||
+                                          (res.ok
+                                            ? 'Delegate could not be verified.'
+                                            : 'Verify request failed. Please try again.'),
+                                      });
+                                      return;
+                                    }
+
+                                    setToast({
+                                      type: 'success',
+                                      title: 'Verified',
+                                      body:
+                                        (data &&
+                                          (data.message as string | undefined)) ||
+                                        'Delegate email verification succeeded.',
+                                    });
+
+                                    await fetchAttendees();
+                                  } catch (err) {
+                                    console.error('Verify failed', err);
+                                    setToast({
+                                      type: 'error',
+                                      title: 'Network Error',
+                                      body: 'We could not reach the verify service. Please try again.',
+                                    });
+                                  }
+                                })();
+                              }}
+                            >
+                              Verify
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={attendee.status === 'Confirmed'}
+                              className={`w-full px-3 py-2 text-left text-xs font-black uppercase tracking-[0.18em] transition-colors border-t ${
+                                attendee.status === 'Confirmed'
+                                  ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
+                                  : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
+                              }`}
+                              onClick={() => {
+                                (async () => {
+                                  setOpenActionForId(null);
+                                  try {
+                                    if (!supabaseFunctionsBaseUrl) {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Config Error',
+                                        body: 'Supabase functions URL is not configured.',
+                                      });
+                                      return;
+                                    }
+
+                                    if (!attendee.xsUserId) {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Missing Delegate ID',
+                                        body: 'This delegate does not have a valid XS userId in Supabase.',
+                                      });
+                                      return;
+                                    }
+
+                                    const res = await fetch(
+                                      `${supabaseFunctionsBaseUrl}/checkin-attendee`,
+                                      {
+                                        method: 'POST',
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          ...(supabaseAnonKey
+                                            ? {
+                                                apikey: supabaseAnonKey,
+                                                Authorization: `Bearer ${supabaseAnonKey}`,
+                                              }
+                                            : {}),
+                                        },
+                                        body: JSON.stringify({
+                                          uid: attendee.xsUserId,
+                                          conferenceCode,
+                                        }),
+                                      }
+                                    );
+
+                                    const data = await res
+                                      .json()
+                                      .catch(() => ({} as any));
+
+                                    if (!res.ok) {
+                                      const reason = data.reason as string | undefined;
+                                      const message =
+                                        (data &&
+                                          (data.message as string | undefined)) ||
+                                        'Check-in failed. Please try again.';
+
+                                      setToast({
+                                        type: 'error',
+                                        title:
+                                          reason === 'not_registered'
+                                            ? 'Not Registered'
+                                            : reason === 'not_allowed'
+                                              ? 'Not Allowed'
+                                              : 'Check-in Error',
+                                        body: message,
+                                      });
+                                      return;
+                                    }
+
+                                    setToast({
+                                      type: 'success',
+                                      title: 'Checked In',
+                                      body:
+                                        (data && (data.message as string | undefined)) ||
+                                        'This delegate has been checked in successfully.',
+                                    });
+
+                                    await fetchAttendees();
+                                  } catch (err) {
+                                    console.error('Check-in failed', err);
+                                    setToast({
+                                      type: 'error',
+                                      title: 'Network Error',
+                                      body: 'We could not reach the check-in service. Please try again.',
+                                    });
+                                  }
+                                })();
+                              }}
+                            >
+                              {attendee.status === 'Confirmed'
+                                ? 'Checked In'
+                                : 'Check In'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -516,6 +730,12 @@ export function AttendeeDashboard() {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
+                            ...(supabaseAnonKey
+                              ? {
+                                  apikey: supabaseAnonKey,
+                                  Authorization: `Bearer ${supabaseAnonKey}`,
+                                }
+                              : {}),
                           },
                           body: JSON.stringify({
                             uid: userId,
@@ -643,7 +863,15 @@ export function AttendeeDashboard() {
               </button>
               <RegistrationForm
                 onBack={() => setShowRegistration(false)}
-                hideStep4
+                onSuccess={() => {
+                  setShowRegistration(false);
+                  setToast({
+                    type: 'success',
+                    title: 'Registered',
+                    body: 'User added successfully. Please check your email to verify your account.',
+                  });
+                  void fetchAttendees();
+                }}
               />
             </div>
           </div>

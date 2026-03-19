@@ -508,9 +508,14 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
 interface RegistrationFormProps {
   onBack: () => void;
   hideStep4?: boolean;
+  onSuccess?: () => void;
 }
 
-export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hideStep4 }) => {
+export const RegistrationForm: React.FC<RegistrationFormProps> = ({
+  onBack,
+  hideStep4,
+  onSuccess,
+}) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -535,13 +540,6 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
   });
   const [password, setPassword] = useState('');
 
-  const [generatedPassword] = useState(
-    () =>
-      Math.random().toString(36).slice(-8) +
-      '!' +
-      Math.random().toString(36).slice(-3).toUpperCase()
-  );
-
   const apiBaseUrl =
     (import.meta as any).env?.VITE_BASE_URL ||
     (import.meta as any).env?.BASE_URL ||
@@ -557,6 +555,10 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
   const supabaseFunctionsBaseUrl =
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
+    '';
+  const supabaseAnonKey =
+    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_ANON_KEY : '') ||
     '';
 
   type DeviceType = 'android' | 'ios' | 'desktop';
@@ -584,6 +586,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
 
     setLoading(true);
     setError(null);
+    let notifySuccess = false;
 
     try {
       const nameForBackend =
@@ -594,11 +597,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
         name: nameForBackend,
         surname: surnameForBackend,
         email: formData.email,
-        password: generatedPassword,
+        password: password.trim(),
         conferenceCode,
-        title: formData.title,
-        company: formData.organisation,
-        phone: formData.phone,
         termsAccepted: formData.codeOfConduct,
         privacyAccepted: formData.photographyConsent
       };
@@ -613,7 +613,43 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
       const data = await response.json();
 
       if (response.ok) {
-        // Fire-and-forget mirror into Supabase via Edge Function, only after XS success
+        // AddUser creates the user account; UploadImages creates the card.
+        const xsUserId =
+          data?.userId ?? data?.userData?.uid ?? data?.userData?.userId;
+
+        if (!xsUserId) {
+          throw new Error('XS userId missing from AddUser response.');
+        }
+
+        // JSON-only UploadImages: no alternatePhone and no images.
+        const uploadImagesRes = await fetch(
+          `${apiBaseUrl}/Users/${encodeURIComponent(xsUserId)}/UploadImages`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              phone: formData.phone,
+              occupation: formData.title,
+              company: formData.organisation,
+            }),
+          }
+        );
+
+        const uploadImagesData = await uploadImagesRes
+          .json()
+          .catch(() => ({} as any));
+
+        if (!uploadImagesRes.ok) {
+          setError(
+            (uploadImagesData && uploadImagesData.message) ||
+              'Failed to create XS card. Please try again.'
+          );
+          return;
+        }
+
+        // Mirror into Supabase only after BOTH AddUser and UploadImages succeed.
         if (supabaseFunctionsBaseUrl) {
           const mirrorPayload = {
             xsPayload: payload,
@@ -632,25 +668,34 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
               photoConsent: formData.photoConsent,
               codeOfConduct: formData.codeOfConduct,
               photographyConsent: formData.photographyConsent,
+              xsUserId,
             },
           };
 
           try {
-            void fetch(`${supabaseFunctionsBaseUrl}/mirror-registration`, {
+            await fetch(`${supabaseFunctionsBaseUrl}/mirror-registration`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
+                ...(supabaseAnonKey
+                  ? {
+                      apikey: supabaseAnonKey,
+                      Authorization: `Bearer ${supabaseAnonKey}`,
+                    }
+                  : {}),
               },
               body: JSON.stringify(mirrorPayload),
-            }).catch((mirrorErr) => {
-              console.warn('Supabase mirror failed (non-blocking):', mirrorErr);
             });
           } catch (mirrorErr) {
             console.warn('Supabase mirror failed (non-blocking):', mirrorErr);
           }
         }
 
-        setSuccess(true);
+        if (onSuccess) {
+          notifySuccess = true;
+        } else {
+          setSuccess(true);
+        }
       } else {
         setError(data.message || 'Registration failed. Please try again.');
       }
@@ -659,6 +704,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({ onBack, hide
       console.error('Registration error:', err);
     } finally {
       setLoading(false);
+      if (notifySuccess) onSuccess?.();
     }
   };
 
