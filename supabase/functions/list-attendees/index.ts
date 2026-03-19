@@ -64,7 +64,7 @@ serve(async (req) => {
     let query = supabase
       .from('registrations')
       .select(
-        'id, conference_code, first_name, last_name, organisation, email, phone, investment_focus, created_at, checked_in, checked_in_at',
+        'id, conference_code, xs_user_id, first_name, last_name, organisation, email, phone, investment_focus, created_at, checked_in, checked_in_at',
       )
       .eq('conference_code', conferenceCode)
       .order('created_at', { ascending: false });
@@ -104,6 +104,7 @@ serve(async (req) => {
       phone: row.phone,
       investmentFocus: row.investment_focus,
       createdAt: row.created_at,
+      xsUserId: row.xs_user_id,
       status: row.checked_in ? 'Confirmed' : 'Registered',
       checkedIn: !!row.checked_in,
       checkedInAt: row.checked_in_at,
