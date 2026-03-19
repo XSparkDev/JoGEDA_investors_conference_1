@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -47,59 +47,6 @@ db.exec(
   );
 `.trim()
 );
-
-// Seed with some dummy data for local testing if empty
-const existingCount = db
-  .prepare('SELECT COUNT(*) as count FROM attendees;')
-  .get() as { count: number };
-
-if (existingCount.count === 0) {
-  const seedAttendees = [
-    {
-      name: 'Dr Vuyiwe Marambana',
-      email: 'vuyiwe.marambana@example.com',
-      organisation: 'JoGEDA',
-      phone: '+27 11 555 0101',
-      investmentFocus: 'Tourism & Property Development',
-    },
-    {
-      name: 'Cllr Nomvuyo Mposelwa',
-      email: 'nomvuyo.mposelwa@example.com',
-      organisation: 'Joe Gqabi District Municipality',
-      phone: '+27 11 555 0202',
-      investmentFocus: 'Agriculture & Agro-processing',
-    },
-    {
-      name: 'Bantu Magqashela',
-      email: 'bantu.magqashela@example.com',
-      organisation: 'JoGEDA Board',
-      phone: '+27 11 555 0303',
-      investmentFocus: 'Renewable Energy',
-    },
-    {
-      name: 'Thandi Mokoena',
-      email: 'thandi.mokoena@example.com',
-      organisation: 'Frontier Capital',
-      phone: '+27 21 555 0404',
-      investmentFocus: 'Industrial & Logistics',
-    },
-  ];
-
-  const insert = db.prepare(
-    `
-    INSERT INTO attendees (name, email, organisation, phone, investmentFocus)
-    VALUES (@name, @email, @organisation, @phone, @investmentFocus);
-  `.trim()
-  );
-
-  const insertMany = db.transaction((rows: typeof seedAttendees) => {
-    for (const row of rows) {
-      insert.run(row);
-    }
-  });
-
-  insertMany(seedAttendees);
-}
 
 // --- Supabase admin client ---
 const supabaseUrl =

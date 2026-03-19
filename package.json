@@ -12,12 +12,14 @@
     "lint": "tsc --noEmit",
     "server": "tsx server/index.ts",
     "start": "node dist/server.js",
-    "supabase:functions:serve": "supabase functions serve --env-file ./supabase/.env.local",
-    "supabase:functions:deploy:mirror": "supabase functions deploy mirror-registration",
-    "supabase:functions:deploy:status": "supabase functions deploy user-status-proxy",
-    "supabase:functions:deploy:checkin": "supabase functions deploy checkin-attendee",
-    "supabase:functions:deploy:list": "supabase functions deploy list-attendees",
-    "supabase:functions:deploy:all": "npm run supabase:functions:deploy:mirror && npm run supabase:functions:deploy:status && npm run supabase:functions:deploy:checkin && npm run supabase:functions:deploy:list"
+    "supabase:functions:serve": "npx supabase functions serve --env-file ./supabase/.env.local",
+    "supabase:functions:deploy:mirror": "npx supabase functions deploy mirror-registration",
+    "supabase:functions:deploy:status": "npx supabase functions deploy user-status-proxy",
+    "supabase:functions:deploy:checkin": "npx supabase functions deploy checkin-attendee",
+    "supabase:functions:deploy:list": "npx supabase functions deploy list-attendees",
+    "supabase:functions:deploy:export": "npx supabase functions deploy export-attendees",
+    "supabase:functions:deploy:verify": "npx supabase functions deploy mark-email-verified",
+    "supabase:functions:deploy:all": "npm run supabase:functions:deploy:mirror && npm run supabase:functions:deploy:status && npm run supabase:functions:deploy:checkin && npm run supabase:functions:deploy:list && npm run supabase:functions:deploy:export && npm run supabase:functions:deploy:verify"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

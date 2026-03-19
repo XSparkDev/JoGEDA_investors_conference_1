@@ -13,46 +13,11 @@ type Attendee = {
   investmentFocus?: string;
   createdAt?: string;
   status?: 'Registered' | 'Confirmed';
+  emailVerified?: boolean;
+  emailVerifiedAt?: string | null;
 };
 
-const demoAttendees: Attendee[] = [
-  {
-    id: 'demo-1',
-    name: 'Dr Vuyiwe Marambana',
-    email: 'vuyiwe.marambana@example.com',
-    organisation: 'JoGEDA',
-    phone: '+27 11 555 0101',
-    investmentFocus: 'Tourism & Property Development',
-    status: 'Registered',
-  },
-  {
-    id: 'demo-2',
-    name: 'Cllr Nomvuyo Mposelwa',
-    email: 'nomvuyo.mposelwa@example.com',
-    organisation: 'Joe Gqabi District Municipality',
-    phone: '+27 11 555 0202',
-    investmentFocus: 'Agriculture & Agro-processing',
-    status: 'Registered',
-  },
-  {
-    id: 'demo-3',
-    name: 'Bantu Magqashela',
-    email: 'bantu.magqashela@example.com',
-    organisation: 'JoGEDA Board',
-    phone: '+27 11 555 0303',
-    investmentFocus: 'Renewable Energy',
-    status: 'Registered',
-  },
-  {
-    id: 'demo-4',
-    name: 'Thandi Mokoena',
-    email: 'thandi.mokoena@example.com',
-    organisation: 'Frontier Capital',
-    phone: '+27 21 555 0404',
-    investmentFocus: 'Industrial & Logistics',
-    status: 'Registered',
-  },
-];
+type ExportFormat = 'csv' | 'excel' | 'pdf';
 
 export function AttendeeDashboard() {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -67,6 +32,9 @@ export function AttendeeDashboard() {
   const [showRegisteredModal, setShowRegisteredModal] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [showExportConfirm, setShowExportConfirm] = useState(false);
+  const [pendingExportFormat, setPendingExportFormat] = useState<ExportFormat | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<{
     type: 'success' | 'error';
     title: string;
@@ -86,24 +54,7 @@ export function AttendeeDashboard() {
   const conferenceCode =
     (import.meta as any).env?.VITE_CONFERENCE_CODE ||
     (import.meta as any).env?.CONFERENCE_CODE ||
-    (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '') ||
-    'EC2026';
-
-  const xsApiBaseUrl =
-    (import.meta as any).env?.VITE_BASE_URL ||
-    (import.meta as any).env?.BASE_URL ||
-    '';
-
-  const conferenceApiKey =
-    (import.meta as any).env?.VITE_CONFERENCE_API_KEY ||
-    (import.meta as any).env?.CONFERENCE_API_KEY ||
-    '';
-
-  const verifyEndpointUrl =
-    (import.meta as any).env?.VITE_VERIFY_ENDPOINT_URL ||
-    (import.meta as any).env?.VITE_VERIFY_ENDPOINT_PATH
-      ? `${xsApiBaseUrl}${(import.meta as any).env?.VITE_VERIFY_ENDPOINT_PATH}`
-      : '';
+    (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '');
 
   const fetchAttendees = async () => {
     setLoading(true);
@@ -132,22 +83,16 @@ export function AttendeeDashboard() {
       const data = (await res.json()) as { attendees?: Attendee[] };
       const loaded = data.attendees || [];
 
-      if (loaded.length === 0 && import.meta.env.DEV) {
-        setAttendees(demoAttendees);
-      } else {
-        setAttendees(
-          loaded.map((a) => ({
-            ...a,
-            status: a.status ?? 'Registered',
-          }))
-        );
-      }
+      setAttendees(
+        loaded.map((a) => ({
+          ...a,
+          status: a.status ?? 'Registered',
+        }))
+      );
     } catch (err) {
       console.error('Failed to fetch attendees', err);
-      setError('Unable to load attendees. Showing demo data instead.');
-      if (import.meta.env.DEV) {
-        setAttendees(demoAttendees);
-      }
+      setError('Unable to load attendees.');
+      setAttendees([]);
     } finally {
       setLoading(false);
     }
@@ -159,103 +104,96 @@ export function AttendeeDashboard() {
     return () => window.clearTimeout(id);
   }, [toast]);
 
-  const exportData = (format: 'csv' | 'excel' | 'pdf') => {
-    const rows = filteredAttendees.length ? filteredAttendees : attendees;
-    if (!rows.length) return;
+  const openExportConfirm = (format: ExportFormat) => {
+    setPendingExportFormat(format);
+    setExportOpen(false);
+    setShowExportConfirm(true);
+  };
 
-    if (format === 'pdf') {
-      const win = window.open('', '_blank', 'noopener,noreferrer');
-      if (!win) return;
-      const html = `
-        <html>
-          <head>
-            <title>Attendees</title>
-            <style>
-              body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; padding: 16px; }
-              table { border-collapse: collapse; width: 100%; }
-              th, td { border: 1px solid #e5e5e5; padding: 6px 8px; text-align: left; }
-              th { background: #f4f4f5; }
-            </style>
-          </head>
-          <body>
-            <h1>Attendees</h1>
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Organisation</th>
-                  <th>Phone</th>
-                  <th>Investment Focus</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows
-                  .map(
-                    (a) => `
-                  <tr>
-                    <td>${a.name}</td>
-                    <td>${a.email}</td>
-                    <td>${a.organisation ?? ''}</td>
-                    <td>${a.phone ?? ''}</td>
-                    <td>${a.investmentFocus ?? ''}</td>
-                    <td>${a.status ?? 'Registered'}</td>
-                  </tr>`
-                  )
-                  .join('')}
-              </tbody>
-            </table>
-          </body>
-        </html>
-      `;
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      win.print();
+  const runCentralExporter = async () => {
+    if (!pendingExportFormat) return;
+    if (!attendees.length) {
+      setShowExportConfirm(false);
+      setToast({
+        type: 'error',
+        title: 'No Data',
+        body: 'There are no attendees to export.',
+      });
       return;
     }
 
-    const header = [
-      'Name',
-      'Email',
-      'Organisation',
-      'Phone',
-      'Investment Focus',
-      'Status',
-      'Registered At',
-    ];
+    try {
+      setExporting(true);
+      if (!supabaseFunctionsBaseUrl) {
+        setToast({
+          type: 'error',
+          title: 'Config Error',
+          body: 'Supabase functions URL is not configured.',
+        });
+        return;
+      }
 
-    const csvLines = [
-      header.join(','),
-      ...rows.map((a) =>
-        [
-          a.name,
-          a.email,
-          a.organisation ?? '',
-          a.phone ?? '',
-          a.investmentFocus ?? '',
-          a.status ?? 'Registered',
-          a.createdAt ?? '',
-        ]
-          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-          .join(',')
-      ),
-    ];
+      const res = await fetch(`${supabaseFunctionsBaseUrl}/export-attendees`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(supabaseAnonKey
+            ? {
+                apikey: supabaseAnonKey,
+                Authorization: `Bearer ${supabaseAnonKey}`,
+              }
+            : {}),
+        },
+        body: JSON.stringify({
+          format: pendingExportFormat,
+          conferenceCode,
+        }),
+      });
 
-    const blob = new Blob([csvLines.join('\n')], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download =
-      format === 'excel' ? 'attendees.xlsx' : 'attendees.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as any));
+        setToast({
+          type: 'error',
+          title: 'Export Failed',
+          body:
+            (data && (data.message as string | undefined)) ||
+            'Export request failed. Please try again.',
+        });
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get('content-disposition') || '';
+      const fileNameMatch = disposition.match(/filename="([^"]+)"/i);
+      const fileName =
+        fileNameMatch?.[1] ||
+        `attendees.${pendingExportFormat === 'excel' ? 'xlsx' : pendingExportFormat}`;
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      setToast({
+        type: 'success',
+        title: 'Export Complete',
+        body: `Download started (${fileName}).`,
+      });
+    } catch (err) {
+      console.error('Export failed', err);
+      setToast({
+        type: 'error',
+        title: 'Network Error',
+        body: 'Could not reach export service. Please try again.',
+      });
+    } finally {
+      setExporting(false);
+      setShowExportConfirm(false);
+      setPendingExportFormat(null);
+    }
   };
 
   useEffect(() => {
@@ -346,8 +284,7 @@ export function AttendeeDashboard() {
                   <button
                     type="button"
                     onClick={() => {
-                      exportData('csv');
-                      setExportOpen(false);
+                      openExportConfirm('csv');
                     }}
                     className="w-full px-3 py-2 text-left hover:bg-zinc-50"
                   >
@@ -356,8 +293,7 @@ export function AttendeeDashboard() {
                   <button
                     type="button"
                     onClick={() => {
-                      exportData('excel');
-                      setExportOpen(false);
+                      openExportConfirm('excel');
                     }}
                     className="w-full px-3 py-2 text-left hover:bg-zinc-50"
                   >
@@ -366,8 +302,7 @@ export function AttendeeDashboard() {
                   <button
                     type="button"
                     onClick={() => {
-                      exportData('pdf');
-                      setExportOpen(false);
+                      openExportConfirm('pdf');
                     }}
                     className="w-full px-3 py-2 text-left hover:bg-zinc-50"
                   >
@@ -480,9 +415,9 @@ export function AttendeeDashboard() {
                           <div className="absolute right-0 mt-2 w-44 rounded-xl border border-zinc-200 bg-white shadow-lg z-20 overflow-hidden">
                             <button
                               type="button"
-                              disabled={attendee.status === 'Confirmed' || !attendee.xsUserId}
+                              disabled={attendee.status === 'Confirmed' || !attendee.email}
                               className={`w-full px-3 py-2 text-left text-xs font-black uppercase tracking-[0.18em] transition-colors ${
-                                attendee.status === 'Confirmed' || !attendee.xsUserId
+                                attendee.status === 'Confirmed' || !attendee.email
                                   ? 'text-zinc-400 cursor-default bg-zinc-50'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white'
                               }`}
@@ -490,28 +425,29 @@ export function AttendeeDashboard() {
                                 (async () => {
                                   setOpenActionForId(null);
                                   try {
-                                    if (!verifyEndpointUrl) {
+                                    if (!supabaseFunctionsBaseUrl) {
                                       setToast({
                                         type: 'error',
-                                        title: 'Verify Not Configured',
-                                        body: 'Set VITE_VERIFY_ENDPOINT_URL (or VITE_VERIFY_ENDPOINT_PATH).',
+                                        title: 'Config Error',
+                                        body: 'Supabase functions URL is not configured.',
                                       });
                                       return;
                                     }
 
-                                    const res = await fetch(verifyEndpointUrl, {
+                                    const res = await fetch(`${supabaseFunctionsBaseUrl}/mark-email-verified`, {
                                       method: 'POST',
                                       headers: {
                                         'Content-Type': 'application/json',
-                                        ...(conferenceApiKey
+                                        ...(supabaseAnonKey
                                           ? {
-                                              Authorization: `Bearer ${conferenceApiKey}`,
+                                              apikey: supabaseAnonKey,
+                                              Authorization: `Bearer ${supabaseAnonKey}`,
                                             }
                                           : {}),
                                       },
                                       body: JSON.stringify({
-                                        uid: attendee.xsUserId,
                                         email: attendee.email,
+                                        conferenceCode,
                                       }),
                                     });
 
@@ -519,11 +455,9 @@ export function AttendeeDashboard() {
                                       .json()
                                       .catch(() => ({} as any));
 
-                                    const isEmailVerified = Boolean(
-                                      (data as any).isEmailVerified,
-                                    );
+                                    const verifySuccess = Boolean((data as any).success);
 
-                                    if (!res.ok || !isEmailVerified) {
+                                    if (!res.ok || !verifySuccess) {
                                       setToast({
                                         type: 'error',
                                         title: 'Verify Failed',
@@ -531,7 +465,7 @@ export function AttendeeDashboard() {
                                           (data &&
                                             (data.message as string | undefined)) ||
                                           (res.ok
-                                            ? 'Delegate could not be verified.'
+                                            ? 'Delegate email could not be marked as verified.'
                                             : 'Verify request failed. Please try again.'),
                                       });
                                       return;
@@ -563,9 +497,9 @@ export function AttendeeDashboard() {
 
                             <button
                               type="button"
-                              disabled={attendee.status === 'Confirmed'}
+                              disabled={attendee.status === 'Confirmed' || !attendee.emailVerified}
                               className={`w-full px-3 py-2 text-left text-xs font-black uppercase tracking-[0.18em] transition-colors border-t ${
-                                attendee.status === 'Confirmed'
+                                attendee.status === 'Confirmed' || !attendee.emailVerified
                                   ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
                               }`}
@@ -629,6 +563,8 @@ export function AttendeeDashboard() {
                                             ? 'Not Registered'
                                             : reason === 'not_allowed'
                                               ? 'Not Allowed'
+                                              : reason === 'email_not_verified'
+                                                ? 'Email Not Verified'
                                               : 'Check-in Error',
                                         body: message,
                                       });
@@ -657,6 +593,8 @@ export function AttendeeDashboard() {
                             >
                               {attendee.status === 'Confirmed'
                                 ? 'Checked In'
+                                : !attendee.emailVerified
+                                  ? 'Verify First'
                                 : 'Check In'}
                             </button>
                           </div>
@@ -873,6 +811,40 @@ export function AttendeeDashboard() {
                   void fetchAttendees();
                 }}
               />
+            </div>
+          </div>
+        )}
+        {showExportConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl border border-zinc-100 text-center relative">
+              <h2 className="text-xl font-display font-black uppercase text-jogeda-dark mb-3">
+                Confirm Export
+              </h2>
+              <p className="text-sm text-zinc-600 mb-6">
+                Are you sure you want to export all attendees and download the{' '}
+                {pendingExportFormat?.toUpperCase()} file?
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowExportConfirm(false);
+                    setPendingExportFormat(null);
+                  }}
+                  className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-zinc-600 hover:border-zinc-300 hover:text-zinc-800 transition-colors"
+                  disabled={exporting}
+                >
+                  No
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void runCentralExporter()}
+                  className="inline-flex items-center justify-center rounded-xl bg-jogeda-dark px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors disabled:opacity-50"
+                  disabled={exporting}
+                >
+                  {exporting ? 'Exporting...' : 'Yes'}
+                </button>
+              </div>
             </div>
           </div>
         )}
