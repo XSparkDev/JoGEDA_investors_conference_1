@@ -18,6 +18,8 @@ import {
   FileText,
   Camera,
   Linkedin,
+  Eye,
+  EyeOff,
   X
 } from 'lucide-react';
 import { QrScanner } from '../components/QrScanner';
@@ -539,18 +541,17 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     headshot: null as File | null
   });
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const apiBaseUrl =
     (import.meta as any).env?.VITE_BASE_URL ||
     (import.meta as any).env?.BASE_URL ||
-    (typeof process !== 'undefined' ? (process as any).env?.BASE_URL : '') ||
-    'https://baseurl.xscard.co.za';
+    (typeof process !== 'undefined' ? (process as any).env?.BASE_URL : '');
 
   const conferenceCode =
     (import.meta as any).env?.VITE_CONFERENCE_CODE ||
     (import.meta as any).env?.CONFERENCE_CODE ||
-    (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '') ||
-    'EC2026';
+    (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '');
 
   const supabaseFunctionsBaseUrl =
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
@@ -954,12 +955,24 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
                       <input 
                         required
-                        type="password" 
+                        type={showPassword ? 'text' : 'password'}
                         placeholder="Create a secure password"
-                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-12 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-jogeda-dark transition-colors"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>

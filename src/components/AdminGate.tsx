@@ -1,13 +1,15 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface AdminGateProps {
   children: ReactNode;
 }
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'jogeda-admin';
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || '';
 
 export function AdminGate({ children }: AdminGateProps) {
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [authenticated, setAuthenticated] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.sessionStorage.getItem('jogeda_admin_authed') === 'true';
@@ -49,14 +51,28 @@ export function AdminGate({ children }: AdminGateProps) {
             <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-2">
               Admin Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm font-medium outline-none focus:border-jogeda-green transition-colors"
-              placeholder="Enter password"
-              autoComplete="off"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 pr-12 rounded-xl border border-zinc-200 bg-zinc-50 text-sm font-medium outline-none focus:border-jogeda-green transition-colors"
+                placeholder="Enter password"
+                autoComplete="off"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-jogeda-dark transition-colors"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
           {error && (
             <p className="text-xs text-red-500 font-medium bg-red-50 border border-red-100 rounded-xl px-3 py-2">

@@ -168,11 +168,12 @@ serve(async (req) => {
 
     // Try to find by xs_user_id first, then fallback to email + conference_code
     let registrationId: string | null = null;
+    let emailVerified = false;
 
     if (uid) {
       const { data, error } = await supabase
         .from('registrations')
-        .select('id')
+        .select('id, email_verified')
         .eq('xs_user_id', uid)
         .eq('conference_code', conferenceCode)
         .maybeSingle();
@@ -181,13 +182,14 @@ serve(async (req) => {
         console.error('[checkin-attendee] Lookup by xs_user_id failed', error);
       } else if (data) {
         registrationId = (data as any).id ?? null;
+        emailVerified = Boolean((data as any).email_verified);
       }
     }
 
     if (!registrationId && email) {
       const { data, error } = await supabase
         .from('registrations')
-        .select('id')
+        .select('id, email_verified')
         .eq('conference_code', conferenceCode)
         .ilike('email', email)
         .maybeSingle();
@@ -196,6 +198,7 @@ serve(async (req) => {
         console.error('[checkin-attendee] Lookup by email failed', error);
       } else if (data) {
         registrationId = (data as any).id ?? null;
+        emailVerified = Boolean((data as any).email_verified);
       }
     }
 
@@ -215,6 +218,23 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
         },
+      );
+    }
+
+    if (!emailVerified) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          reason: 'email_not_verified',
+          message: 'Delegate email is not verified yet.',
+        }),
+        {
+          status: 403,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        }
       );
     }
 
