@@ -24,9 +24,12 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    // Used to authenticate internal calls to other Supabase Edge Functions.
+    // Supabase anon key is a JWT-like token and is not secret; it just allows function invocation.
+    const anonKey = Deno.env.get('ANON_KEY') ?? '';
     const functionsBaseUrl =
-      Deno.env.get('SUPABASE_EDGE_FUNCTIONS_BASE_URL') ??
-      Deno.env.get('SUPABASE_FUNCTIONS_BASE_URL') ??
+      Deno.env.get('EDGE_FUNCTIONS_BASE_URL') ??
+      Deno.env.get('FUNCTIONS_BASE_URL') ??
       '';
 
     if (!supabaseUrl || !serviceRoleKey) {
@@ -80,7 +83,7 @@ serve(async (req) => {
       : undefined;
 
     if (!statusUrl) {
-      console.error('[checkin-attendee] SUPABASE_FUNCTIONS_BASE_URL not configured.');
+      console.error('[checkin-attendee] FUNCTIONS_BASE_URL/EDGE_FUNCTIONS_BASE_URL not configured.');
       return new Response(
         JSON.stringify({
           ok: false,
@@ -102,6 +105,12 @@ serve(async (req) => {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        ...(anonKey
+          ? {
+              apikey: anonKey,
+              Authorization: `Bearer ${anonKey}`,
+            }
+          : {}),
       },
     });
 
@@ -122,6 +131,8 @@ serve(async (req) => {
           ok: false,
           reason: 'not_registered',
           message: 'User is not registered for this conference.',
+          status: { success, found, allowed },
+          raw: statusData,
         }),
         {
           status: 403,
@@ -139,6 +150,8 @@ serve(async (req) => {
           ok: false,
           reason: 'not_allowed',
           message: 'User is not allowed for this conference.',
+          status: { success, found, allowed },
+          raw: statusData,
         }),
         {
           status: 403,

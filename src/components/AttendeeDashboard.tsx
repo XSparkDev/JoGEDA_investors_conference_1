@@ -7,6 +7,7 @@ type Attendee = {
   id: number | string;
   name: string;
   email: string;
+  xsUserId?: string;
   organisation?: string;
   phone?: string;
   investmentFocus?: string;
@@ -75,6 +76,10 @@ export function AttendeeDashboard() {
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
     '';
+  const supabaseAnonKey =
+    (import.meta as any).env?.VITE_SUPABASE_ANON_KEY ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_ANON_KEY : '') ||
+    '';
 
   const conferenceCode =
     (import.meta as any).env?.VITE_CONFERENCE_CODE ||
@@ -93,7 +98,16 @@ export function AttendeeDashboard() {
       const url = new URL(`${supabaseFunctionsBaseUrl}/list-attendees`);
       url.searchParams.set('conferenceCode', conferenceCode);
 
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), {
+        headers: {
+          ...(supabaseAnonKey
+            ? {
+                apikey: supabaseAnonKey,
+                Authorization: `Bearer ${supabaseAnonKey}`,
+              }
+            : {}),
+        },
+      });
       if (!res.ok) {
         throw new Error('Failed to load attendees');
       }
@@ -433,20 +447,97 @@ export function AttendeeDashboard() {
                       <button
                         type="button"
                         disabled={attendee.status === 'Confirmed'}
-                        onClick={() =>
-                          setAttendees((prev) =>
-                            prev.map((a) =>
-                              a.id === attendee.id ? { ...a, status: 'Confirmed' } : a
-                            )
-                          )
-                        }
+                        onClick={() => {
+                          (async () => {
+                            try {
+                              if (!supabaseFunctionsBaseUrl) {
+                                setToast({
+                                  type: 'error',
+                                  title: 'Config Error',
+                                  body: 'Supabase functions URL is not configured.',
+                                });
+                                return;
+                              }
+
+                              if (!attendee.xsUserId) {
+                                setToast({
+                                  type: 'error',
+                                  title: 'Missing Delegate ID',
+                                  body: 'This delegate does not have a valid XS userId in Supabase.',
+                                });
+                                return;
+                              }
+
+                              const res = await fetch(
+                                `${supabaseFunctionsBaseUrl}/checkin-attendee`,
+                                {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    ...(supabaseAnonKey
+                                      ? {
+                                          apikey: supabaseAnonKey,
+                                          Authorization: `Bearer ${supabaseAnonKey}`,
+                                        }
+                                      : {}),
+                                  },
+                                  body: JSON.stringify({
+                                    uid: attendee.xsUserId,
+                                    conferenceCode,
+                                  }),
+                                }
+                              );
+
+                              const data = await res
+                                .json()
+                                .catch(() => ({} as any));
+
+                              if (!res.ok) {
+                                const reason = data.reason as string | undefined;
+                                const message =
+                                  (data && (data.message as string | undefined)) ||
+                                  'Check-in failed. Please try again.';
+
+                                setToast({
+                                  type: 'error',
+                                  title:
+                                    reason === 'not_registered'
+                                      ? 'Not Registered'
+                                      : reason === 'not_allowed'
+                                        ? 'Not Allowed'
+                                        : 'Check-in Error',
+                                  body: message,
+                                });
+                                return;
+                              }
+
+                              setToast({
+                                type: 'success',
+                                title: 'Checked In',
+                                body:
+                                  (data && (data.message as string | undefined)) ||
+                                  'This delegate has been checked in successfully.',
+                              });
+
+                              // Refresh from Supabase so status updates correctly.
+                              await fetchAttendees();
+                            } catch (err) {
+                              console.error('Check-in failed', err);
+                              setToast({
+                                type: 'error',
+                                title: 'Network Error',
+                                body: 'We could not reach the check-in service. Please try again.',
+                              });
+                            }
+                          })();
+                        }}
                         className={`inline-flex items-center justify-center rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${
                           attendee.status === 'Confirmed'
                             ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 cursor-default'
                             : 'bg-jogeda-dark text-white hover:bg-jogeda-green hover:text-jogeda-dark border border-jogeda-dark/40'
                         }`}
                       >
-                        {attendee.status === 'Confirmed' ? 'Confirmed' : 'Confirm'}
+                        {attendee.status === 'Confirmed' ? 'Checked In' : 'Check In'}
                       </button>
                     </td>
                   </tr>
@@ -516,6 +607,12 @@ export function AttendeeDashboard() {
                           method: 'POST',
                           headers: {
                             'Content-Type': 'application/json',
+                            ...(supabaseAnonKey
+                              ? {
+                                  apikey: supabaseAnonKey,
+                                  Authorization: `Bearer ${supabaseAnonKey}`,
+                                }
+                              : {}),
                           },
                           body: JSON.stringify({
                             uid: userId,
@@ -643,7 +740,15 @@ export function AttendeeDashboard() {
               </button>
               <RegistrationForm
                 onBack={() => setShowRegistration(false)}
-                hideStep4
+                onSuccess={() => {
+                  setShowRegistration(false);
+                  setToast({
+                    type: 'success',
+                    title: 'Registered',
+                    body: 'User added successfully. Please check your email to verify your account.',
+                  });
+                  void fetchAttendees();
+                }}
               />
             </div>
           </div>

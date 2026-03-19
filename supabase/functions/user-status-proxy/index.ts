@@ -68,7 +68,12 @@ serve(async (req) => {
     }
 
     // Delegate flag/eligibility check to XS backend (Firestore is checked there).
-    const upstreamUrl = `${xsBaseUrl}/api/conference/user-status/${encodeURIComponent(uid)}`;
+    // Pass conferenceCode so XS can check the correct conference flag (if the XS endpoint supports it).
+    const upstreamUrl = conferenceCode
+      ? `${xsBaseUrl}/api/conference/user-status/${encodeURIComponent(uid)}?conferenceCode=${encodeURIComponent(
+          conferenceCode,
+        )}`
+      : `${xsBaseUrl}/api/conference/user-status/${encodeURIComponent(uid)}`;
 
     const upstream = await fetch(upstreamUrl, {
       headers: {
