@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { JoGedaTemplate, RegistrationForm } from './templates/Templates';
 import { AdminGate } from './components/AdminGate';
@@ -11,6 +11,20 @@ import { AttendeeDashboard } from './components/AttendeeDashboard';
 
 export default function App() {
   type ViewMode = 'landing' | 'registration' | 'admin';
+
+  const redirectedRef = useRef(false);
+
+  const googlePlayUrl =
+    (import.meta as any).env?.VITE_GOOGLE_PLAY_URL ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_GOOGLE_PLAY_URL : '');
+  const appleAppUrl =
+    (import.meta as any).env?.VITE_APPLE_APP_URL ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_APPLE_APP_URL : '');
+
+  const installRedirectRequested =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('install') === '1'
+      : false;
 
   const [view, setView] = useState<ViewMode>(() => {
     if (typeof window === 'undefined') return 'landing';
@@ -29,6 +43,25 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (installRedirectRequested) {
+      // Prevent repeated redirects (React StrictMode may mount twice in dev).
+      if (!redirectedRef.current) {
+        redirectedRef.current = true;
+
+        const ua = navigator.userAgent || '';
+        const isIOS = /iPad|iPhone|iPod/.test(ua);
+        const targetUrl = isIOS ? appleAppUrl : googlePlayUrl;
+
+        if (targetUrl) {
+          window.location.replace(targetUrl);
+          return;
+        }
+
+        // If config is missing, just fall through to normal SPA view.
+        console.warn('Install redirect requested but store URLs are missing.');
+      }
+    }
+
     const onHashChange = () => {
       if (window.location.hash === '#admin') {
         setView('admin');
@@ -43,8 +76,13 @@ export default function App() {
 
   return (
     <div className="relative">
+      {installRedirectRequested ? (
+        <div className="min-h-screen flex items-center justify-center bg-white text-zinc-600 text-sm font-bold">
+          Redirecting to the app store...
+        </div>
+      ) : null}
       <AnimatePresence mode="wait">
-        {view === 'registration' ? (
+        {installRedirectRequested ? null : view === 'registration' ? (
           <motion.div
             key="registration"
             initial={{ opacity: 0 }}
