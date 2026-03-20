@@ -63,7 +63,7 @@ export function AdminGate({ children }: AdminGateProps) {
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-jogeda-dark transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:text-jogeda-dark transition-colors"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? (
@@ -81,7 +81,7 @@ export function AdminGate({ children }: AdminGateProps) {
           )}
           <button
             type="submit"
-            className="w-full mt-2 py-3 rounded-xl bg-jogeda-dark text-white text-xs font-black uppercase tracking-[0.2em] hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+            className="inline-flex items-center justify-center w-full mt-2 py-3 rounded-xl bg-jogeda-dark text-white text-xs font-black uppercase tracking-[0.2em] text-center hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
           >
             Enter Dashboard
           </button>

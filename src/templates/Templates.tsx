@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { QrScanner } from '../components/QrScanner';
 import { RegisterQrSection } from '../components/RegisterQrSection';
+import QRCode from 'react-qr-code';
 
 interface TemplateProps {
   onRegister: () => void;
@@ -140,7 +141,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
                 <div className="flex flex-wrap gap-4">
                   <button 
                     onClick={onRegister}
-                    className="bg-jogeda-dark text-white px-10 py-5 font-display font-black uppercase tracking-widest hover:bg-jogeda-green hover:text-jogeda-dark transition-all w-fit shadow-lg shadow-black/10"
+                    className="inline-flex items-center justify-center bg-jogeda-dark text-white px-10 py-5 font-display font-black uppercase tracking-widest text-center hover:bg-jogeda-green hover:text-jogeda-dark transition-all w-fit shadow-lg shadow-black/10"
                   >
                     Register Now
                   </button>
@@ -153,7 +154,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
                       setHasOpenedUrlForScan(false);
                       setIsScannerOpen(true);
                     }}
-                    className="inline-flex items-center gap-2 px-6 py-4 rounded-xl border border-jogeda-dark/20 bg-white/70 text-xs font-black uppercase tracking-[0.2em] text-jogeda-dark hover:bg-jogeda-green/10 transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl border border-jogeda-dark/20 bg-white/70 text-xs font-black uppercase tracking-[0.2em] text-jogeda-dark hover:bg-jogeda-green/10 transition-colors"
                   >
                     <Camera className="w-4 h-4" />
                     Scan Conference QR
@@ -491,7 +492,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
             </p>
             <button 
               onClick={onRegister}
-              className="w-full bg-jogeda-green text-jogeda-dark py-5 rounded-xl font-display font-black uppercase tracking-widest hover:scale-[1.02] transition-transform"
+              className="inline-flex items-center justify-center w-full px-6 py-5 rounded-xl bg-jogeda-green text-jogeda-dark font-display font-black uppercase tracking-widest text-center hover:scale-[1.02] transition-transform"
             >
               Secure Your Delegate Spot
             </button>
@@ -553,6 +554,14 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     (import.meta as any).env?.CONFERENCE_CODE ||
     (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '');
 
+  const googlePlayUrl =
+    (import.meta as any).env?.VITE_GOOGLE_PLAY_URL ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_GOOGLE_PLAY_URL : '');
+
+  const appleAppUrl =
+    (import.meta as any).env?.VITE_APPLE_APP_URL ||
+    (typeof process !== 'undefined' ? (process as any).env?.VITE_APPLE_APP_URL : '');
+
   const supabaseFunctionsBaseUrl =
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
@@ -577,6 +586,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   const deviceType = getDeviceType();
 
   const totalSteps = hideStep4 ? 3 : 4;
+
+  // Single redirect page used by the "desktop" QR in step 4.
+  // When scanned (typically by a phone), the redirect page forwards to the correct app store.
+  const installRedirectUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}${window.location.pathname}?install=1&cardIndex=1`
+      : '';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -726,7 +742,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           </p>
           <button 
             onClick={onBack}
-            className="bg-jogeda-dark text-white px-10 py-4 rounded-xl font-display font-black uppercase tracking-widest hover:bg-jogeda-green transition-all"
+            className="inline-flex items-center justify-center bg-jogeda-dark text-white px-10 py-4 rounded-xl font-display font-black uppercase tracking-widest text-center hover:bg-jogeda-green transition-all"
           >
             Return to Home
           </button>
@@ -745,7 +761,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         >
           <button
             onClick={() => setShowCodeOfConduct(false)}
-            className="mb-8 flex items-center gap-2 text-sm font-bold text-zinc-400 hover:text-jogeda-green transition-colors uppercase tracking-widest"
+            className="mb-8 inline-flex items-center justify-center gap-2 text-sm font-bold text-zinc-400 hover:text-jogeda-green transition-colors uppercase tracking-widest"
           >
             <ArrowRight className="w-4 h-4 rotate-180" /> Back to registration
           </button>
@@ -826,7 +842,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-2xl bg-white p-8 md:p-16 rounded-[2rem] shadow-2xl border border-zinc-100"
       >
-        <button onClick={onBack} className="mb-12 flex items-center gap-2 text-sm font-bold text-zinc-400 hover:text-jogeda-green transition-colors uppercase tracking-widest">
+        <button onClick={onBack} className="mb-12 inline-flex items-center justify-center gap-2 text-sm font-bold text-zinc-400 hover:text-jogeda-green transition-colors uppercase tracking-widest">
           <ArrowRight className="w-4 h-4 rotate-180" /> Back to landing
         </button>
 
@@ -964,7 +980,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-jogeda-dark transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:text-jogeda-dark transition-colors"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                       >
                         {showPassword ? (
@@ -1131,7 +1147,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowCodeOfConduct(true)}
-                        className="text-jogeda-green font-bold hover:underline"
+                        className="inline-flex items-center justify-center text-jogeda-green font-bold hover:underline"
                       >
                         Event Code of Conduct
                       </button>{' '}
@@ -1175,25 +1191,21 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
 
                 {deviceType === 'desktop' && (
                   <div className="flex flex-col items-center justify-center gap-6 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-8 py-10">
-                    <div className="w-40 h-40 bg-white rounded-2xl border border-zinc-200 flex items-center justify-center relative overflow-hidden">
-                      <div className="absolute inset-3 grid grid-cols-3 grid-rows-3 gap-1 opacity-40">
-                        <div className="bg-zinc-900" />
-                        <div className="bg-zinc-300" />
-                        <div className="bg-zinc-700" />
-                        <div className="bg-zinc-500" />
-                        <div className="bg-zinc-900" />
-                        <div className="bg-zinc-400" />
-                        <div className="bg-zinc-800" />
-                        <div className="bg-zinc-200" />
-                        <div className="bg-zinc-600" />
-                      </div>
-                      <span className="relative z-10 text-[10px] font-black uppercase tracking-[0.25em] text-zinc-700">
-                        Scan Me
-                      </span>
+                    <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+                      {installRedirectUrl ? (
+                        <QRCode
+                          value={installRedirectUrl}
+                          size={180}
+                          style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                        />
+                      ) : (
+                        <div className="w-44 h-44 flex items-center justify-center text-xs text-zinc-500">
+                          Unable to generate QR
+                        </div>
+                      )}
                     </div>
                     <p className="text-center text-sm text-zinc-600 max-w-sm">
-                      Point your phone&rsquo;s camera at this sample QR code to download XS Card on your device from the relevant
-                      app store.
+                      Point your phone&rsquo;s camera at this QR code to download XS Card from the correct app store.
                     </p>
                   </div>
                 )}
@@ -1204,14 +1216,16 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       You are using an Android device. Install the XS Card app now to complete your profile, receive updates and
                       network with other delegates.
                     </p>
-                    <a
-                      href="https://play.google.com/store/apps/details?id=com.p.zzles.xscard"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center rounded-xl bg-jogeda-green px-6 py-3 text-xs font-black uppercase tracking-[0.25em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
-                    >
-                      Open in Google Play
-                    </a>
+                    {googlePlayUrl ? (
+                      <a
+                        href={googlePlayUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-xl bg-jogeda-green px-6 py-3 text-xs font-black uppercase tracking-[0.25em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
+                      >
+                        Open in Google Play
+                      </a>
+                    ) : null}
                   </div>
                 )}
 
@@ -1221,14 +1235,16 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       You are using an iOS device. Install the XS Card app to keep your delegate details handy, access your
                       tickets and stay in sync with the programme.
                     </p>
-                    <a
-                      href="https://apps.apple.com/us/app/xs-card/id6742452317"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center rounded-xl bg-jogeda-green px-6 py-3 text-xs font-black uppercase tracking-[0.25em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
-                    >
-                      Open in App Store
-                    </a>
+                    {appleAppUrl ? (
+                      <a
+                        href={appleAppUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center rounded-xl bg-jogeda-green px-6 py-3 text-xs font-black uppercase tracking-[0.25em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
+                      >
+                        Open in App Store
+                      </a>
+                    ) : null}
                   </div>
                 )}
 
@@ -1245,14 +1261,14 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
               type="button"
               disabled={loading || step === 1}
               onClick={() => setStep(prev => Math.max(1, prev - 1))}
-              className="px-6 py-4 rounded-xl border border-zinc-200 text-xs font-black uppercase tracking-[0.2em] text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center px-6 py-4 rounded-xl border border-zinc-200 text-xs font-black uppercase tracking-[0.2em] text-center text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Previous Section
             </button>
             <button 
               type="submit"
               disabled={loading}
-              className="flex-1 py-5 bg-jogeda-dark text-white rounded-xl font-display font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-jogeda-green transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-6 py-5 bg-jogeda-dark text-white rounded-xl font-display font-black uppercase tracking-[0.15em] flex items-center justify-center gap-2 hover:bg-jogeda-green transition-all group disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden"
             >
               {loading ? (
                 <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />

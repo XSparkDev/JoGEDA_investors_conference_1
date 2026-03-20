@@ -231,7 +231,7 @@ export function AttendeeDashboard() {
             <button
               type="button"
               onClick={fetchAttendees}
-              className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh List
@@ -246,7 +246,7 @@ export function AttendeeDashboard() {
                 setShowRegisteredModal(false);
                 setScannerOpen(true);
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-jogeda-dark px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-jogeda-dark px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
             >
               <Camera className="w-4 h-4" />
               Open Scanner
@@ -274,7 +274,7 @@ export function AttendeeDashboard() {
               <button
                 type="button"
                 onClick={() => setExportOpen((open) => !open)}
-                className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
               >
                 Export
                 <span className="text-xs">▾</span>
@@ -286,7 +286,7 @@ export function AttendeeDashboard() {
                     onClick={() => {
                       openExportConfirm('csv');
                     }}
-                    className="w-full px-3 py-2 text-left hover:bg-zinc-50"
+                    className="w-full px-3 py-2 text-center hover:bg-zinc-50"
                   >
                     Download CSV
                   </button>
@@ -295,7 +295,7 @@ export function AttendeeDashboard() {
                     onClick={() => {
                       openExportConfirm('excel');
                     }}
-                    className="w-full px-3 py-2 text-left hover:bg-zinc-50"
+                    className="w-full px-3 py-2 text-center hover:bg-zinc-50"
                   >
                     Download Excel
                   </button>
@@ -304,7 +304,7 @@ export function AttendeeDashboard() {
                     onClick={() => {
                       openExportConfirm('pdf');
                     }}
-                    className="w-full px-3 py-2 text-left hover:bg-zinc-50"
+                    className="w-full px-3 py-2 text-center hover:bg-zinc-50"
                   >
                     Download PDF
                   </button>
@@ -318,7 +318,7 @@ export function AttendeeDashboard() {
           <button
             type="button"
             onClick={() => setShowRegistration(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-jogeda-green px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-jogeda-green px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
           >
             <UserPlus className="w-4 h-4" />
             Register attendee
@@ -416,7 +416,7 @@ export function AttendeeDashboard() {
                             <button
                               type="button"
                               disabled={attendee.status === 'Confirmed' || !attendee.email}
-                              className={`w-full px-3 py-2 text-left text-xs font-black uppercase tracking-[0.18em] transition-colors ${
+                              className={`w-full px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] transition-colors ${
                                 attendee.status === 'Confirmed' || !attendee.email
                                   ? 'text-zinc-400 cursor-default bg-zinc-50'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white'
@@ -498,7 +498,7 @@ export function AttendeeDashboard() {
                             <button
                               type="button"
                               disabled={attendee.status === 'Confirmed' || !attendee.emailVerified}
-                              className={`w-full px-3 py-2 text-left text-xs font-black uppercase tracking-[0.18em] transition-colors border-t ${
+                              className={`w-full px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] transition-colors border-t ${
                                 attendee.status === 'Confirmed' || !attendee.emailVerified
                                   ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
