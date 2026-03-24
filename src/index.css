@@ -5,7 +5,8 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Montserrat", sans-serif;
 
-  --color-jogeda-green: #A4C639;
+  /* Deeper, slightly darker variant of the original JoGEDA green */
+  --color-jogeda-green: #7F9F1F;
   --color-jogeda-dark: #1A1A1A;
 }
 

@@ -5,31 +5,46 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && npm run build:server",
+    "build:server": "esbuild server/index.ts --bundle --platform=node --format=esm --outfile=dist/server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "server": "tsx server/index.ts",
+    "start": "node dist/server.js",
+    "supabase:functions:serve": "npx supabase functions serve --env-file ./supabase/.env.local",
+    "supabase:functions:deploy:mirror": "npx supabase functions deploy mirror-registration",
+    "supabase:functions:deploy:status": "npx supabase functions deploy user-status-proxy",
+    "supabase:functions:deploy:checkin": "npx supabase functions deploy checkin-attendee",
+    "supabase:functions:deploy:list": "npx supabase functions deploy list-attendees",
+    "supabase:functions:deploy:export": "npx supabase functions deploy export-attendees",
+    "supabase:functions:deploy:verify": "npx supabase functions deploy mark-email-verified",
+    "supabase:functions:deploy:all": "npm run supabase:functions:deploy:mirror && npm run supabase:functions:deploy:status && npm run supabase:functions:deploy:checkin && npm run supabase:functions:deploy:list && npm run supabase:functions:deploy:export && npm run supabase:functions:deploy:verify"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
+    "@supabase/supabase-js": "^2.99.2",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^12.4.1",
+    "dotenv": "^17.2.3",
+    "express": "^4.21.2",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "vite": "^6.2.0",
-    "express": "^4.21.2",
-    "dotenv": "^17.2.3",
-    "better-sqlite3": "^12.4.1",
-    "motion": "^12.23.24"
+    "react-qr-code": "^2.0.15",
+    "vite": "^6.2.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "esbuild": "^0.25.9",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "@types/express": "^4.17.21"
+    "vite": "^6.2.0"
   }
 }

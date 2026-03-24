@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+*.dll
+*.tmp
+*.temp
+temp/
+tmp/
+.emv
+*.emv
