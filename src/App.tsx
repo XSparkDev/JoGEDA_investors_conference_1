@@ -42,6 +42,14 @@ export default function App() {
     setView('landing');
   };
 
+  const handleOpenAdmin = () => {
+    if (typeof window !== 'undefined') {
+      window.location.hash = 'admin';
+    } else {
+      setView('admin');
+    }
+  };
+
   useEffect(() => {
     if (installRedirectRequested) {
       // Prevent repeated redirects (React StrictMode may mount twice in dev).
@@ -111,7 +119,7 @@ export default function App() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <JoGedaTemplate onRegister={handleRegister} />
+            <JoGedaTemplate onRegister={handleRegister} onOpenAdmin={handleOpenAdmin} />
           </motion.div>
         )}
       </AnimatePresence>

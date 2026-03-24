@@ -64,7 +64,7 @@ serve(async (req) => {
     let query = supabase
       .from('registrations')
       .select(
-        'id, conference_code, xs_user_id, first_name, last_name, organisation, email, phone, investment_focus, created_at, checked_in, checked_in_at, email_verified, email_verified_at',
+        'id, conference_code, xs_user_id, first_name, last_name, organisation, email, phone, investment_focus, created_at, checked_in, checked_in_at, email_verified, email_verified_at, photo_consent, headshot_path, headshot_mime',
       )
       .eq('conference_code', conferenceCode)
       .order('created_at', { ascending: false });
@@ -110,6 +110,9 @@ serve(async (req) => {
       emailVerifiedAt: row.email_verified_at ?? null,
       checkedIn: !!row.checked_in,
       checkedInAt: row.checked_in_at,
+      photoConsent: Boolean(row.photo_consent),
+      headshotPath: row.headshot_path ?? null,
+      headshotMime: row.headshot_mime ?? null,
     }));
 
     return new Response(
