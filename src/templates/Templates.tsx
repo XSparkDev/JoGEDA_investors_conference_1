@@ -687,6 +687,8 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           return;
         }
 
+        
+
         // Mirror into Supabase only after BOTH AddUser and UploadImages succeed.
         if (supabaseFunctionsBaseUrl) {
           const mirrorExtended = {
