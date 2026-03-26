@@ -77,7 +77,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
   return (
     <div className="min-h-screen font-sans">
       {/* Hero Section */}
-      <header className="relative bg-white overflow-hidden">
+      <header className="relative bg-white overflow-x-hidden">
         <div className="absolute top-0 right-0 w-1/2 h-full hidden lg:block">
           <img 
             src="/assets/images/30.webp"
@@ -89,21 +89,19 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
           <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent" />
         </div>
         
-        <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">
-          <div className="flex justify-between items-start mb-20">
-            <div className="flex items-start">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-0 py-12 relative z-10">
+          <div className="flex items-start justify-between mb-20">
               <img
                 src="/assets/images/1.png"
                 className="h-[140px] w-[140px] sm:h-[180px] sm:w-[180px] md:h-[300px] md:w-[300px] object-contain"
                 alt="Conference Logo"
                 referrerPolicy="no-referrer"
               />
-            </div>
-              <div className="hidden md:block">
-                <img 
-                  src="/assets/images/7.png" 
-                  className="h-[300px] w-[300px] object-contain absolute top-0 right-[550px]"
-                  alt="Joe Gqabi District Municipality" 
+              <div className="hidden lg:block absolute top-0 right-[550px] pointer-events-none">
+                <img
+                  src="/assets/images/7.png"
+                  className="h-[300px] w-[300px] object-contain"
+                  alt="Joe Gqabi District Municipality"
                   referrerPolicy="no-referrer"
                 />
               </div>
