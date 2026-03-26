@@ -15,6 +15,9 @@ type Attendee = {
   status?: 'Registered' | 'Confirmed';
   emailVerified?: boolean;
   emailVerifiedAt?: string | null;
+  photoConsent?: boolean;
+  headshotPath?: string | null;
+  headshotMime?: string | null;
 };
 
 type ExportFormat = 'csv' | 'excel' | 'pdf';
@@ -42,6 +45,11 @@ export function AttendeeDashboard() {
   } | null>(null);
 
   const [openActionForId, setOpenActionForId] = useState<string | number | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState('headshot');
+  const [previewAttendee, setPreviewAttendee] = useState<Attendee | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
   const supabaseFunctionsBaseUrl =
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
@@ -200,6 +208,26 @@ export function AttendeeDashboard() {
     fetchAttendees();
   }, []);
 
+  useEffect(() => {
+    const handleOutsideActionClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-action-menu-container="true"]')) return;
+      setOpenActionForId(null);
+    };
+
+    document.addEventListener('mousedown', handleOutsideActionClick);
+    return () => document.removeEventListener('mousedown', handleOutsideActionClick);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewImageUrl) {
+        URL.revokeObjectURL(previewImageUrl);
+      }
+    };
+  }, [previewImageUrl]);
+
   const filteredAttendees = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return attendees;
@@ -210,6 +238,92 @@ export function AttendeeDashboard() {
       );
     });
   }, [attendees, search]);
+
+  const confirmedCount = useMemo(
+    () => attendees.filter((attendee) => attendee.status === 'Confirmed').length,
+    [attendees]
+  );
+
+  const canPreviewHeadshot = (attendee: Attendee) =>
+    Boolean(attendee.photoConsent && attendee.headshotPath);
+
+  const openHeadshotPreview = async (attendee: Attendee) => {
+    if (!canPreviewHeadshot(attendee)) {
+      setToast({
+        type: 'error',
+        title: 'No Preview Available',
+        body: 'No consented headshot is available for this attendee.',
+      });
+      return;
+    }
+
+    if (!supabaseFunctionsBaseUrl) {
+      setToast({
+        type: 'error',
+        title: 'Config Error',
+        body: 'Supabase functions URL is not configured.',
+      });
+      return;
+    }
+
+    setPreviewLoading(true);
+    try {
+      const url = new URL(`${supabaseFunctionsBaseUrl}/preview-headshot`);
+      url.searchParams.set('id', String(attendee.id));
+      if (conferenceCode) {
+        url.searchParams.set('conferenceCode', conferenceCode);
+      }
+
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          ...(supabaseAnonKey
+            ? {
+                apikey: supabaseAnonKey,
+                Authorization: `Bearer ${supabaseAnonKey}`,
+              }
+            : {}),
+        },
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as any));
+        setToast({
+          type: 'error',
+          title: 'Preview Failed',
+          body:
+            (data && (data.message as string | undefined)) ||
+            'Could not load this attendee headshot.',
+        });
+        return;
+      }
+
+      const blob = await res.blob();
+      const newUrl = URL.createObjectURL(blob);
+      if (previewImageUrl) {
+        URL.revokeObjectURL(previewImageUrl);
+      }
+      setPreviewImageUrl(newUrl);
+      setPreviewAttendee(attendee);
+      setPreviewFileName(
+        `${attendee.name || 'attendee'}-headshot`
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '')
+      );
+      setShowPreviewModal(true);
+    } catch (err) {
+      console.error('Headshot preview failed', err);
+      setToast({
+        type: 'error',
+        title: 'Network Error',
+        body: 'We could not load the headshot preview. Please try again.',
+      });
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-start justify-center p-6 md:p-10 font-sans">
@@ -231,7 +345,7 @@ export function AttendeeDashboard() {
             <button
               type="button"
               onClick={fetchAttendees}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh List
@@ -246,7 +360,7 @@ export function AttendeeDashboard() {
                 setShowRegisteredModal(false);
                 setScannerOpen(true);
               }}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-jogeda-dark px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-jogeda-dark px-6 py-3 text-xs font-black uppercase tracking-[0.18em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
             >
               <Camera className="w-4 h-4" />
               Open Scanner
@@ -266,15 +380,22 @@ export function AttendeeDashboard() {
             />
           </div>
           <div className="flex items-center gap-3 justify-between md:justify-end w-full md:w-auto">
-            <p className="text-[11px] text-zinc-500 font-medium">
-              Showing <span className="font-bold text-jogeda-dark">{filteredAttendees.length}</span>{' '}
-              of <span className="font-bold text-jogeda-dark">{attendees.length}</span> attendees
-            </p>
+            <div className="space-y-1">
+              <p className="text-[11px] text-zinc-500 font-medium">
+                Showing <span className="font-bold text-jogeda-dark">{filteredAttendees.length}</span>{' '}
+                of <span className="font-bold text-jogeda-dark">{attendees.length}</span> attendees
+              </p>
+              <p className="text-[11px] text-zinc-500 font-medium">
+                Checked-in:{' '}
+                <span className="font-bold text-jogeda-dark">{confirmedCount}</span> of{' '}
+                <span className="font-bold text-jogeda-dark">{attendees.length}</span>
+              </p>
+            </div>
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setExportOpen((open) => !open)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-5 py-3 text-xs font-black uppercase tracking-[0.18em] text-zinc-600 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
               >
                 Export
                 <span className="text-xs">▾</span>
@@ -286,7 +407,7 @@ export function AttendeeDashboard() {
                     onClick={() => {
                       openExportConfirm('csv');
                     }}
-                    className="w-full px-3 py-2 text-center hover:bg-zinc-50"
+                    className="w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] text-zinc-700 hover:bg-zinc-50"
                   >
                     Download CSV
                   </button>
@@ -295,7 +416,7 @@ export function AttendeeDashboard() {
                     onClick={() => {
                       openExportConfirm('excel');
                     }}
-                    className="w-full px-3 py-2 text-center hover:bg-zinc-50"
+                    className="w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] text-zinc-700 hover:bg-zinc-50"
                   >
                     Download Excel
                   </button>
@@ -304,7 +425,7 @@ export function AttendeeDashboard() {
                     onClick={() => {
                       openExportConfirm('pdf');
                     }}
-                    className="w-full px-3 py-2 text-center hover:bg-zinc-50"
+                    className="w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] text-zinc-700 hover:bg-zinc-50"
                   >
                     Download PDF
                   </button>
@@ -318,7 +439,7 @@ export function AttendeeDashboard() {
           <button
             type="button"
             onClick={() => setShowRegistration(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-jogeda-green px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-jogeda-green px-6 py-3 text-xs font-black uppercase tracking-[0.18em] text-jogeda-dark hover:bg-jogeda-dark hover:text-white transition-colors"
           >
             <UserPlus className="w-4 h-4" />
             Register attendee
@@ -380,27 +501,36 @@ export function AttendeeDashboard() {
                     key={attendee.id}
                     className="border-b border-zinc-50 hover:bg-zinc-50/70 transition-colors"
                   >
-                    <td className="px-4 py-3 text-sm font-semibold text-zinc-900">
+                    <td className="px-4 py-3 text-sm font-semibold text-zinc-900 break-words">
                       {attendee.name}
                     </td>
-                    <td className="px-4 py-3 text-[11px] text-zinc-600">{attendee.email}</td>
-                    <td className="px-4 py-3 text-[11px] text-zinc-600 hidden md:table-cell">
+                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all">{attendee.email}</td>
+                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all hidden md:table-cell">
                       {attendee.organisation || '—'}
                     </td>
-                    <td className="px-4 py-3 text-[11px] text-zinc-600 hidden md:table-cell">
+                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all hidden md:table-cell">
                       {attendee.phone || '—'}
                     </td>
-                    <td className="px-4 py-3 text-[11px] text-zinc-600 hidden md:table-cell">
+                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all hidden md:table-cell">
                       {attendee.investmentFocus || '—'}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-zinc-500 hidden lg:table-cell">
-                      {attendee.status ?? 'Registered'}
+                      {attendee.status === 'Confirmed' ? (
+                        <span className="inline-flex items-center justify-center rounded-lg bg-jogeda-green px-3 py-1 font-black uppercase tracking-[0.12em] text-jogeda-dark">
+                          Confirmed
+                        </span>
+                      ) : (
+                        attendee.status ?? 'Registered'
+                      )}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-right">
-                      <div className="relative inline-flex justify-end">
+                      <div
+                        className="relative inline-flex justify-end"
+                        data-action-menu-container="true"
+                      >
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-200 bg-white/80 hover:bg-zinc-50 transition-colors"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-200 bg-white/80 hover:bg-zinc-50 transition-colors"
                           onClick={() =>
                             setOpenActionForId((prev) =>
                               prev === attendee.id ? null : attendee.id,
@@ -416,7 +546,7 @@ export function AttendeeDashboard() {
                             <button
                               type="button"
                               disabled={attendee.status === 'Confirmed' || !attendee.email}
-                              className={`w-full px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] transition-colors ${
+                              className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors ${
                                 attendee.status === 'Confirmed' || !attendee.email
                                   ? 'text-zinc-400 cursor-default bg-zinc-50'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white'
@@ -498,7 +628,7 @@ export function AttendeeDashboard() {
                             <button
                               type="button"
                               disabled={attendee.status === 'Confirmed' || !attendee.emailVerified}
-                              className={`w-full px-3 py-2 text-center text-xs font-black uppercase tracking-[0.18em] transition-colors border-t ${
+                              className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors border-t ${
                                 attendee.status === 'Confirmed' || !attendee.emailVerified
                                   ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
@@ -596,6 +726,21 @@ export function AttendeeDashboard() {
                                 : !attendee.emailVerified
                                   ? 'Verify First'
                                 : 'Check In'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!canPreviewHeadshot(attendee) || previewLoading}
+                              className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors border-t ${
+                                !canPreviewHeadshot(attendee) || previewLoading
+                                  ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
+                                  : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
+                              }`}
+                              onClick={() => {
+                                setOpenActionForId(null);
+                                void openHeadshotPreview(attendee);
+                              }}
+                            >
+                              {previewLoading ? 'Loading...' : 'Preview'}
                             </button>
                           </div>
                         )}
@@ -781,10 +926,92 @@ export function AttendeeDashboard() {
               <button
                 type="button"
                 onClick={() => setShowRegisteredModal(false)}
-                className="inline-flex items-center justify-center rounded-xl bg-jogeda-dark px-8 py-3 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+                className="inline-flex items-center justify-center rounded-xl bg-jogeda-dark px-6 sm:px-8 py-3 text-xs font-black uppercase tracking-[0.2em] text-white whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
               >
                 Close
               </button>
+            </div>
+          </div>
+        )}
+
+        {showPreviewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+            <div className="w-full max-w-3xl rounded-3xl bg-white p-6 md:p-8 shadow-2xl border border-zinc-100 relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPreviewModal(false);
+                  setPreviewAttendee(null);
+                }}
+                className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors bg-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="mb-4 pr-10">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-jogeda-green">
+                  Attendee Headshot
+                </p>
+                <h2 className="mt-1 text-2xl font-display font-black uppercase text-jogeda-dark">
+                  Preview
+                </h2>
+              </div>
+              <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+                {previewImageUrl ? (
+                  <img
+                    src={previewImageUrl}
+                    alt="Attendee headshot preview"
+                    className="max-h-[60vh] w-full rounded-xl object-contain bg-white"
+                  />
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-sm text-zinc-500">
+                    No image available.
+                  </div>
+                )}
+              </div>
+              {previewAttendee && (
+                <div className="mt-4 rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-3">
+                    Attendee Details
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                    <p>
+                      <span className="font-black text-jogeda-dark">Name:</span>{' '}
+                      <span className="text-zinc-600">{previewAttendee.name || '—'}</span>
+                    </p>
+                    <p>
+                      <span className="font-black text-jogeda-dark">Email:</span>{' '}
+                      <span className="text-zinc-600 break-all">{previewAttendee.email || '—'}</span>
+                    </p>
+                    <p>
+                      <span className="font-black text-jogeda-dark">Organisation:</span>{' '}
+                      <span className="text-zinc-600 break-all">{previewAttendee.organisation || '—'}</span>
+                    </p>
+                    <p>
+                      <span className="font-black text-jogeda-dark">Phone:</span>{' '}
+                      <span className="text-zinc-600 break-all">{previewAttendee.phone || '—'}</span>
+                    </p>
+                    <p>
+                      <span className="font-black text-jogeda-dark">Investment Focus:</span>{' '}
+                      <span className="text-zinc-600 break-all">{previewAttendee.investmentFocus || '—'}</span>
+                    </p>
+                    <p>
+                      <span className="font-black text-jogeda-dark">Status:</span>{' '}
+                      <span className="text-zinc-600">{previewAttendee.status || 'Registered'}</span>
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="mt-4 flex justify-end">
+                {previewImageUrl ? (
+                  <a
+                    href={previewImageUrl}
+                    download={previewFileName}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-jogeda-dark px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+                  >
+                    Download
+                  </a>
+                ) : null}
+              </div>
             </div>
           </div>
         )}
@@ -831,7 +1058,7 @@ export function AttendeeDashboard() {
                     setShowExportConfirm(false);
                     setPendingExportFormat(null);
                   }}
-                  className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-zinc-600 hover:border-zinc-300 hover:text-zinc-800 transition-colors"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-200 bg-white px-7 py-3 text-xs font-black uppercase tracking-[0.2em] text-zinc-600 hover:border-zinc-300 hover:text-zinc-800 transition-colors"
                   disabled={exporting}
                 >
                   No
@@ -839,7 +1066,7 @@ export function AttendeeDashboard() {
                 <button
                   type="button"
                   onClick={() => void runCentralExporter()}
-                  className="inline-flex items-center justify-center rounded-xl bg-jogeda-dark px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-jogeda-dark px-7 py-3 text-xs font-black uppercase tracking-[0.2em] text-white whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-colors disabled:opacity-50"
                   disabled={exporting}
                 >
                   {exporting ? 'Exporting...' : 'Yes'}
@@ -850,8 +1077,8 @@ export function AttendeeDashboard() {
         )}
       </div>
       {toast && (
-        <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
-          <div className="w-full max-w-sm md:max-w-md rounded-[1.75rem] bg-white shadow-2xl border border-zinc-100 relative px-6 py-6 md:px-8 md:py-7">
+        <div className="fixed right-4 top-4 z-50 w-full max-w-sm md:right-6 md:top-6 md:max-w-md">
+          <div className="w-full rounded-[1.75rem] bg-white shadow-2xl border border-zinc-100 relative px-6 py-6 md:px-8 md:py-7">
             <button
               type="button"
               onClick={() => setToast(null)}

@@ -26,6 +26,16 @@ type MirrorRequestBody = {
   };
 };
 
+const DEFAULT_HEADSHOT_BUCKET = 'attendee-headshots';
+
+const safeFileName = (input: string) =>
+  input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.\-_]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -62,14 +72,42 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // FE sends { xsPayload, extended } only after XS AddUser succeeds.
-    const body = (await req.json().catch(() => null)) as MirrorRequestBody | null;
+    const contentType = req.headers.get('content-type') ?? '';
+    let body: MirrorRequestBody | null = null;
+    let headshotFile: File | null = null;
+
+    if (contentType.includes('multipart/form-data')) {
+      const form = await req.formData().catch(() => null);
+      const extendedRaw = form?.get('extended');
+      const xsPayloadRaw = form?.get('xsPayload');
+      const headshotRaw = form?.get('headshot');
+
+      const extended =
+        typeof extendedRaw === 'string'
+          ? (JSON.parse(extendedRaw) as MirrorRequestBody['extended'])
+          : null;
+      const xsPayload =
+        typeof xsPayloadRaw === 'string'
+          ? (JSON.parse(xsPayloadRaw) as MirrorRequestBody['xsPayload'])
+          : {};
+
+      if (headshotRaw instanceof File && headshotRaw.size > 0) {
+        headshotFile = headshotRaw;
+      }
+
+      if (extended) {
+        body = { xsPayload, extended };
+      }
+    } else {
+      // Backward-compatible JSON body support.
+      body = (await req.json().catch(() => null)) as MirrorRequestBody | null;
+    }
 
     if (!body || !body.extended) {
       return new Response(
         JSON.stringify({
           ok: false,
-          message: 'Invalid payload. Expected { xsPayload, extended }.',
+          message: 'Invalid payload. Expected multipart or JSON with { xsPayload, extended }.',
         }),
         {
           status: 400,
@@ -156,10 +194,73 @@ serve(async (req) => {
       );
     }
 
+    const registrationId = data?.id ?? null;
+    const shouldUploadHeadshot = Boolean(photoConsent) && headshotFile && registrationId;
+
+    if (shouldUploadHeadshot) {
+      const bucketName = Deno.env.get('HEADSHOT_BUCKET') || DEFAULT_HEADSHOT_BUCKET;
+      const originalName = headshotFile.name || 'headshot.jpg';
+      const fileName = safeFileName(originalName) || 'headshot.jpg';
+      const storagePath = `${conferenceCode}/${registrationId}/${Date.now()}-${fileName}`;
+      const mimeType = headshotFile.type || 'application/octet-stream';
+
+      const uploadRes = await supabase.storage
+        .from(bucketName)
+        .upload(storagePath, headshotFile, {
+          contentType: mimeType,
+          upsert: false,
+        });
+
+      if (uploadRes.error) {
+        console.error('[mirror-registration] Headshot upload error', uploadRes.error);
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            message: 'Registration recorded, but failed to upload headshot.',
+            registrationId,
+          }),
+          {
+            status: 502,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+      }
+
+      const { error: updateErr } = await supabase
+        .from('registrations')
+        .update({
+          headshot_path: storagePath,
+          headshot_uploaded_at: new Date().toISOString(),
+          headshot_mime: mimeType,
+        })
+        .eq('id', registrationId);
+
+      if (updateErr) {
+        console.error('[mirror-registration] Headshot metadata update error', updateErr);
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            message: 'Registration recorded, but failed to save headshot metadata.',
+            registrationId,
+          }),
+          {
+            status: 502,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+      }
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,
-        registrationId: data?.id ?? null,
+        registrationId,
       }),
       {
         status: 200,

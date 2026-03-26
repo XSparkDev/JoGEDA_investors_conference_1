@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Calendar, 
@@ -28,15 +28,33 @@ import QRCode from 'react-qr-code';
 
 interface TemplateProps {
   onRegister: () => void;
+  onOpenAdmin: () => void;
 }
 
-export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
+export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmin }) => {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [checkInMessage, setCheckInMessage] = useState<string | null>(null);
   const [hasOpenedUrlForScan, setHasOpenedUrlForScan] = useState(false);
   const [showRegisteredModal, setShowRegisteredModal] = useState(false);
+
+  // About section image carousel
+  const aboutSectionImages = [
+    '/assets/images/IMG_1888.jpg',
+    '/assets/images/IMG_1885.jpg',
+    '/assets/images/IMG_1882.jpg',
+  ];
+  const [aboutSectionImageIndex, setAboutSectionImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const intervalId = window.setInterval(() => {
+      setAboutSectionImageIndex((prev) => (prev + 1) % aboutSectionImages.length);
+    }, 3500);
+
+    return () => window.clearInterval(intervalId);
+  }, [aboutSectionImages.length]);
   const sectorContainer = {
     hidden: {},
     show: {
@@ -59,10 +77,10 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
   return (
     <div className="min-h-screen font-sans">
       {/* Hero Section */}
-      <header className="relative bg-white overflow-hidden">
+      <header className="relative bg-white overflow-x-hidden">
         <div className="absolute top-0 right-0 w-1/2 h-full hidden lg:block">
           <img 
-            src="https://picsum.photos/seed/south-africa-bridge/1200/1600" 
+            src="/assets/images/30.webp"
             alt="Joe Gqabi Landscape" 
             className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700"
             style={{ clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)' }}
@@ -71,24 +89,22 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
           <div className="absolute inset-0 bg-gradient-to-r from-white via-transparent to-transparent" />
         </div>
         
-        <div className="max-w-7xl mx-auto px-6 py-12 relative z-10">
-          <div className="flex justify-between items-start mb-20">
-            <div className="flex items-start">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-0 py-12 relative z-10">
+          <div className="flex items-start justify-between mb-20">
               <img
                 src="/assets/images/1.png"
                 className="h-[140px] w-[140px] sm:h-[180px] sm:w-[180px] md:h-[300px] md:w-[300px] object-contain"
                 alt="Conference Logo"
                 referrerPolicy="no-referrer"
               />
-            </div>
-            <div className="hidden md:block">
-              <img 
-                src="/assets/images/7.png" 
-                className="h-[300px] w-[300px] object-contain absolute top-0 right-[550px]"
-                alt="Joe Gqabi District Municipality" 
-                referrerPolicy="no-referrer"
-              />
-            </div>
+              <div className="hidden lg:block absolute top-0 right-[550px] pointer-events-none">
+                <img
+                  src="/assets/images/7.png"
+                  className="h-[300px] w-[300px] object-contain"
+                  alt="Joe Gqabi District Municipality"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
           </div>
 
           <div className="max-w-2xl">
@@ -97,7 +113,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
               animate={{ opacity: 1, y: 0 }}
               className="mb-4"
             >
-              <h1 className="font-display font-black text-6xl md:text-8xl uppercase leading-[0.85] mt-2">
+              <h1 className="font-display font-black text-4xl sm:text-6xl md:text-8xl uppercase leading-[0.85] mt-2">
                 Investment <br />
                 <span className="text-jogeda-green">Conference</span>
               </h1>
@@ -112,7 +128,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
               transition={{ delay: 0.3 }}
               className="mt-12"
             >
-              <div className="text-jogeda-green font-display font-black text-7xl md:text-9xl uppercase leading-none">
+              <div className="text-jogeda-green font-display font-black text-5xl sm:text-7xl md:text-9xl uppercase leading-none">
                 2026
               </div>
               <div className="w-32 h-3 bg-jogeda-dark mt-4" />
@@ -141,23 +157,9 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
                 <div className="flex flex-wrap gap-4">
                   <button 
                     onClick={onRegister}
-                    className="inline-flex items-center justify-center bg-jogeda-dark text-white px-10 py-5 font-display font-black uppercase tracking-widest text-center hover:bg-jogeda-green hover:text-jogeda-dark transition-all w-fit shadow-lg shadow-black/10"
+                    className="inline-flex items-center justify-center bg-jogeda-dark text-white px-6 sm:px-10 py-5 font-display font-black uppercase tracking-widest text-center whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-all w-fit shadow-lg shadow-black/10"
                   >
                     Register Now
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setScanResult(null);
-                      setScanError(null);
-                      setCheckInMessage(null);
-                      setHasOpenedUrlForScan(false);
-                      setIsScannerOpen(true);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl border border-jogeda-dark/20 bg-white/70 text-xs font-black uppercase tracking-[0.2em] text-jogeda-dark hover:bg-jogeda-green/10 transition-colors"
-                  >
-                    <Camera className="w-4 h-4" />
-                    Scan Conference QR
                   </button>
                 </div>
               </div>
@@ -283,7 +285,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
             <button
               type="button"
               onClick={() => setShowRegisteredModal(false)}
-              className="inline-flex items-center justify-center rounded-xl bg-jogeda-dark px-8 py-3 text-xs font-black uppercase tracking-[0.2em] text-white hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+              className="inline-flex items-center justify-center rounded-xl bg-jogeda-dark px-6 sm:px-8 py-3 text-xs font-black uppercase tracking-[0.2em] text-white whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
             >
               Close
             </button>
@@ -305,7 +307,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
                 {[
                   'Showcase 10+ bankable investment opportunities',
                   'Enable deal-making and financial commitments',
-                  'Promote Maletswai as anchor investment hub',
+                  'Promote the Joe Gqabi District as an anchor investment hub',
                   'Strengthen regional competitiveness'
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-3">
@@ -317,12 +319,21 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
             </div>
             <div className="relative">
               <div className="bg-jogeda-green absolute -inset-4 -z-10 rounded-3xl rotate-3" />
-              <img 
-                src="https://picsum.photos/seed/nature/800/600" 
-                alt="Joe Gqabi Nature" 
-                className="rounded-2xl shadow-2xl w-full"
-                referrerPolicy="no-referrer"
-              />
+              <div className="relative rounded-2xl shadow-2xl w-full overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.img
+                    key={aboutSectionImageIndex}
+                    src={aboutSectionImages[aboutSectionImageIndex]}
+                    alt="Joe Gqabi Nature"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                    initial={{ opacity: 0, y: 12, scale: 1.02 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -12, scale: 1.02 }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  />
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
@@ -342,27 +353,27 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
                 title: 'Executive Mayor',
                 name: 'Cllr Nomvuyo Mposelwa',
                 msg: 'The Joe Gqabi District Municipality is entering a decisive phase of economic repositioning. We are transforming our structural advantages into structured investment opportunities.',
-                img: 'https://picsum.photos/seed/mayor/400/400'
+                img: '/assets/images/28.png'
               },
               {
                 title: 'Board Chairperson',
                 name: 'Mr Bantu Magqashela',
                 msg: 'This pivotal conference is defined by economic transition and renewed focus on sustainable economic growth. We carry a dual responsibility to deliver commercial value.',
-                img: 'https://picsum.photos/seed/chair/400/400'
+                img: '/assets/images/22.png'
               },
               {
                 title: 'Chief Executive Officer',
                 name: 'Dr Vuyiwe Marambana',
                 msg: 'The Joe Gqabi Investment Conference marks a significant milestone in our collective effort to reposition the district as a serious contender for sustainable investment.',
-                img: 'https://picsum.photos/seed/ceo/400/400'
+                img: '/assets/images/24.png'
               }
             ].map((leader, i) => (
               <div key={i} className="bg-white p-8 rounded-3xl shadow-sm border border-zinc-100 flex flex-col items-center text-center">
-                <div className="w-40 h-40 hexagon-clip mb-6 overflow-hidden">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 md:w-40 md:h-40 hexagon-clip mb-4 sm:mb-6 overflow-hidden">
                   <img src={leader.img} alt={leader.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </div>
-                <h3 className="font-display font-black uppercase text-jogeda-green text-sm tracking-widest mb-1">{leader.title}</h3>
-                <p className="font-bold text-lg mb-4">{leader.name}</p>
+                <h3 className="font-display font-black uppercase text-jogeda-green text-xs sm:text-sm tracking-widest mb-1">{leader.title}</h3>
+                <p className="font-bold text-base sm:text-lg mb-4">{leader.name}</p>
                 <p className="text-zinc-500 text-sm leading-relaxed italic">"{leader.msg}"</p>
               </div>
             ))}
@@ -500,7 +511,14 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister }) => {
         </div>
         <div className="max-w-7xl mx-auto px-6 mt-24 pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-zinc-500 font-bold uppercase tracking-widest">
           <p>© 2026 Joe Gqabi Economic Development Agency (JoGEDA)</p>
-          <p>Siya Phambili Asijiki</p>
+          <button
+            type="button"
+            onClick={onOpenAdmin}
+            className="inline-flex items-center justify-center text-xs font-bold uppercase tracking-widest text-zinc-600/80 hover:text-zinc-300 transition-colors"
+            aria-label="Organiser dashboard access"
+          >
+            Siya Phambili Asijiki
+          </button>
         </div>
       </footer>
     </div>
@@ -543,6 +561,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   });
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showCredentials, setShowCredentials] = useState(false);
 
   const apiBaseUrl =
     (import.meta as any).env?.VITE_BASE_URL ||
@@ -666,34 +685,38 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           return;
         }
 
-        // Mirror into Supabase only after BOTH AddUser and UploadImages succeed.
+              // Mirror into Supabase only after BOTH AddUser and UploadImages succeed.
         if (supabaseFunctionsBaseUrl) {
-          const mirrorPayload = {
-            xsPayload: payload,
-            extended: {
-              conferenceCode,
-              firstName: formData.firstName,
-              lastName: formData.lastName,
-              preferredName: formData.preferredName,
-              title: formData.title,
-              organisation: formData.organisation,
-              email: formData.email,
-              phone: formData.phone,
-              bio: formData.bio,
-              investmentFocus: formData.investmentFocus,
-              linkedinWebsite: formData.linkedinWebsite,
-              photoConsent: formData.photoConsent,
-              codeOfConduct: formData.codeOfConduct,
-              photographyConsent: formData.photographyConsent,
-              xsUserId,
-            },
+          const mirrorExtended = {
+            conferenceCode,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            preferredName: formData.preferredName,
+            title: formData.title,
+            organisation: formData.organisation,
+            email: formData.email,
+            phone: formData.phone,
+            bio: formData.bio,
+            investmentFocus: formData.investmentFocus,
+            linkedinWebsite: formData.linkedinWebsite,
+            photoConsent: formData.photoConsent,
+            codeOfConduct: formData.codeOfConduct,
+            photographyConsent: formData.photographyConsent,
+            xsUserId,
           };
+
+          const mirrorForm = new FormData();
+          mirrorForm.append('xsPayload', JSON.stringify(payload));
+          mirrorForm.append('extended', JSON.stringify(mirrorExtended));
+
+          if (formData.photoConsent && formData.headshot) {
+            mirrorForm.append('headshot', formData.headshot, formData.headshot.name);
+          }
 
           try {
             await fetch(`${supabaseFunctionsBaseUrl}/mirror-registration`, {
               method: 'POST',
               headers: {
-                'Content-Type': 'application/json',
                 ...(supabaseAnonKey
                   ? {
                       apikey: supabaseAnonKey,
@@ -701,7 +724,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     }
                   : {}),
               },
-              body: JSON.stringify(mirrorPayload),
+              body: mirrorForm,
             });
           } catch (mirrorErr) {
             console.warn('Supabase mirror failed (non-blocking):', mirrorErr);
@@ -742,7 +765,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           </p>
           <button 
             onClick={onBack}
-            className="inline-flex items-center justify-center bg-jogeda-dark text-white px-10 py-4 rounded-xl font-display font-black uppercase tracking-widest text-center hover:bg-jogeda-green transition-all"
+            className="inline-flex items-center justify-center bg-jogeda-dark text-white px-6 sm:px-10 py-4 rounded-xl font-display font-black uppercase tracking-widest text-center whitespace-nowrap hover:bg-jogeda-green transition-all"
           >
             Return to Home
           </button>
@@ -761,7 +784,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         >
           <button
             onClick={() => setShowCodeOfConduct(false)}
-            className="mb-8 inline-flex items-center justify-center gap-2 text-sm font-bold text-zinc-400 hover:text-jogeda-green transition-colors uppercase tracking-widest"
+            className="mb-8 inline-flex items-center justify-center gap-2 text-sm font-bold text-zinc-400 hover:text-jogeda-green transition-colors uppercase tracking-widest whitespace-nowrap"
           >
             <ArrowRight className="w-4 h-4 rotate-180" /> Back to registration
           </button>
@@ -869,7 +892,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           <p className="text-zinc-500 mt-2 font-medium">
             Joe Gqabi Investment Conference 2026 Registration
           </p>
-          <p className="mt-1 text-[11px] text-zinc-500 font-medium">
+          <p className="mt-1 text-sm text-zinc-600 font-medium">
             Completing this form will also create your XS Card digital profile for networking and
             event communications.
           </p>
@@ -965,32 +988,6 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Password *</label>
-                    <div className="relative">
-                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
-                      <input 
-                        required
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Create a secure password"
-                        className="w-full pl-12 pr-12 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:text-jogeda-dark transition-colors"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
 
@@ -1023,6 +1020,38 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6 items-start">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Password *</label>
+                    <div className="relative">
+                      <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
+                      <input 
+                        required
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Create a secure password"
+                        className="w-full pl-12 pr-12 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:text-jogeda-dark transition-colors"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="w-4 h-4" />
+                        ) : (
+                          <Eye className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="pt-8 text-[10px] font-black tracking-[0.2em] text-zinc-400">
+                    Note: You are creating credentials for XS card. You&apos;ll need them to log onto the XS card app.
+                  </p>
                 </div>
               </motion.div>
             ) : step === 2 ? (
@@ -1190,23 +1219,40 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                 </div>
 
                 {deviceType === 'desktop' && (
-                  <div className="flex flex-col items-center justify-center gap-6 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-8 py-10">
-                    <div className="bg-white rounded-2xl border border-zinc-200 p-4">
-                      {installRedirectUrl ? (
-                        <QRCode
-                          value={installRedirectUrl}
-                          size={180}
-                          style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
-                        />
-                      ) : (
-                        <div className="w-44 h-44 flex items-center justify-center text-xs text-zinc-500">
-                          Unable to generate QR
+                  <div className="space-y-4">
+                    <div className="flex flex-col items-center justify-center gap-6 rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-8 py-10">
+                      <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+                        {installRedirectUrl ? (
+                          <QRCode
+                            value={installRedirectUrl}
+                            size={180}
+                            style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
+                          />
+                        ) : (
+                          <div className="w-44 h-44 flex items-center justify-center text-xs text-zinc-500">
+                            Unable to generate QR
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-center text-sm text-zinc-600 max-w-sm">
+                        Point your phone&rsquo;s camera at this QR code to download XS Card from the correct app store.
+                      </p>
+                    </div>
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCredentials((prev) => !prev)}
+                        className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-zinc-700 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
+                      >
+                        Show credentials
+                      </button>
+                      {showCredentials && (
+                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-700 space-y-2">
+                          <p><span className="font-black">Email:</span> {formData.email || 'Not provided yet'}</p>
+                          <p><span className="font-black">Password:</span> {password || 'Not provided yet'}</p>
                         </div>
                       )}
                     </div>
-                    <p className="text-center text-sm text-zinc-600 max-w-sm">
-                      Point your phone&rsquo;s camera at this QR code to download XS Card from the correct app store.
-                    </p>
                   </div>
                 )}
 
@@ -1226,6 +1272,21 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         Open in Google Play
                       </a>
                     ) : null}
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCredentials((prev) => !prev)}
+                        className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-zinc-700 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
+                      >
+                        Show credentials
+                      </button>
+                      {showCredentials && (
+                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-700 space-y-2">
+                          <p><span className="font-black">Email:</span> {formData.email || 'Not provided yet'}</p>
+                          <p><span className="font-black">Password:</span> {password || 'Not provided yet'}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -1245,30 +1306,45 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         Open in App Store
                       </a>
                     ) : null}
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowCredentials((prev) => !prev)}
+                        className="inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-zinc-700 hover:border-jogeda-green hover:text-jogeda-dark transition-colors"
+                      >
+                        Show credentials
+                      </button>
+                      {showCredentials && (
+                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 text-sm text-zinc-700 space-y-2">
+                          <p><span className="font-black">Email:</span> {formData.email || 'Not provided yet'}</p>
+                          <p><span className="font-black">Password:</span> {password || 'Not provided yet'}</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  You can proceed without installing the app, but we recommend completing this step to unlock the full digital
+                  Note: You can proceed without installing the app, but we recommend completing this step to unlock the full digital
                   conference experience.
                 </p>
               </motion.div>
             )}
           </AnimatePresence>
 
-          <div className="flex items-center justify-between gap-4 pt-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 w-full">
             <button
               type="button"
               disabled={loading || step === 1}
               onClick={() => setStep(prev => Math.max(1, prev - 1))}
-              className="inline-flex items-center justify-center px-6 py-4 rounded-xl border border-zinc-200 text-xs font-black uppercase tracking-[0.2em] text-center text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto inline-flex items-center justify-center px-4 sm:px-6 py-4 rounded-xl border border-zinc-200 text-xs font-black uppercase tracking-[0.2em] text-center text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Previous Section
             </button>
             <button 
               type="submit"
               disabled={loading}
-              className="flex-1 px-6 py-5 bg-jogeda-dark text-white rounded-xl font-display font-black uppercase tracking-[0.15em] flex items-center justify-center gap-2 hover:bg-jogeda-green transition-all group disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden"
+              className="w-full sm:flex-1 px-4 sm:px-6 py-5 bg-jogeda-dark text-white rounded-xl font-display font-black uppercase tracking-[0.15em] flex items-center justify-center gap-2 hover:bg-jogeda-green transition-all group disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden"
             >
               {loading ? (
                 <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
