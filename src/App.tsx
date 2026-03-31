@@ -8,6 +8,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { JoGedaTemplate, RegistrationForm } from './templates/Templates';
 import { AdminGate } from './components/AdminGate';
 import { AttendeeDashboard } from './components/AttendeeDashboard';
+import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner';
+import {
+  getStoredAnalyticsConsent,
+  initGoogleAnalytics,
+  setGoogleAnalyticsDisabled,
+  setStoredAnalyticsConsent,
+  shouldShowAnalyticsBanner,
+  type AnalyticsConsentState,
+} from './analytics';
 
 export default function App() {
   type ViewMode = 'landing' | 'registration' | 'admin';
@@ -33,6 +42,9 @@ export default function App() {
     if (params.get('register') === '1') return 'registration';
     return 'landing';
   });
+  const [analyticsConsent, setAnalyticsConsent] = useState<AnalyticsConsentState>(() =>
+    getStoredAnalyticsConsent()
+  );
 
   const handleRegister = () => {
     setView('registration');
@@ -49,6 +61,22 @@ export default function App() {
       setView('admin');
     }
   };
+
+  useEffect(() => {
+    const isAdminView = view === 'admin';
+    if (isAdminView) {
+      setGoogleAnalyticsDisabled(true);
+      return;
+    }
+
+    if (analyticsConsent === 'granted') {
+      setGoogleAnalyticsDisabled(false);
+      initGoogleAnalytics();
+      return;
+    }
+
+    setGoogleAnalyticsDisabled(true);
+  }, [view, analyticsConsent]);
 
   useEffect(() => {
     if (installRedirectRequested) {
@@ -123,6 +151,18 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      {view !== 'admin' && analyticsConsent === 'unset' && shouldShowAnalyticsBanner() ? (
+        <AnalyticsConsentBanner
+          onAccept={() => {
+            setStoredAnalyticsConsent('granted');
+            setAnalyticsConsent('granted');
+          }}
+          onDecline={() => {
+            setStoredAnalyticsConsent('denied');
+            setAnalyticsConsent('denied');
+          }}
+        />
+      ) : null}
     </div>
   );
 }
