@@ -31,3 +31,24 @@
 .sub-heading {
   @apply font-display font-bold uppercase tracking-wider text-jogeda-green text-xl md:text-2xl mb-4;
 }
+
+@keyframes consentPulse {
+  0% {
+    background-color: var(--color-jogeda-dark);
+    color: white;
+  }
+  100% {
+    background-color: var(--color-jogeda-green);
+    color: var(--color-jogeda-dark);
+  }
+}
+
+.consent-accept-attention {
+  animation: consentPulse 1s infinite alternate;
+}
+
+.consent-accept-attention:hover {
+  animation: none;
+  background-color: var(--color-jogeda-green);
+  color: var(--color-jogeda-dark);
+}
