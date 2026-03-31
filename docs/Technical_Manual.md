@@ -102,6 +102,9 @@ Set in `.env` (do not commit real secrets):
 - `VITE_SUPABASE_ANON_KEY`: Supabase anon key used to call Edge Functions (`src/templates/Templates.tsx`, `src/components/AttendeeDashboard.tsx`)
 - `VITE_SUPABASE_FUNCTIONS_URL`: base URL for Edge Functions (`src/templates/Templates.tsx`, `src/components/AttendeeDashboard.tsx`)
 - `VITE_GOOGLE_PLAY_URL`, `VITE_APPLE_APP_URL`: app store redirects (`src/App.tsx`, `src/templates/Templates.tsx`)
+- `VITE_GA_ENABLED`: set to `true` only for production deployments where analytics is required
+- `VITE_GA_MEASUREMENT_ID`: GA4 Measurement ID (example: `G-SXS8C877Y1`)
+- `VITE_GA_ALLOWED_HOSTS`: comma-separated host allowlist for GA (example: `conference.example.com,www.conference.example.com`)
 - `VITE_CONFERENCE_API_KEY` (if present): used by some server-side flows; avoid placing real values in docs
 
 ### 3.2 Supabase Edge Function secrets
