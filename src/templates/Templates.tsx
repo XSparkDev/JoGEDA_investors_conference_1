@@ -537,6 +537,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   hideStep4,
   onSuccess,
 }) => {
+  const MIN_PASSWORD_LENGTH = 6;
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -572,6 +573,11 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     (import.meta as any).env?.VITE_CONFERENCE_CODE ||
     (import.meta as any).env?.CONFERENCE_CODE ||
     (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '');
+
+  const conferenceApiKey =
+    (import.meta as any).env?.VITE_CONFERENCE_API_KEY ||
+    (import.meta as any).env?.CONFERENCE_API_KEY ||
+    (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_API_KEY : '');
 
   const googlePlayUrl =
     (import.meta as any).env?.VITE_GOOGLE_PLAY_URL ||
@@ -625,6 +631,12 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     let notifySuccess = false;
 
     try {
+      const trimmedPassword = password.trim();
+      if (trimmedPassword.length < MIN_PASSWORD_LENGTH) {
+        setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+        return;
+      }
+
       const nameForBackend =
         `${formData.firstName} ${formData.lastName}`.trim() || formData.preferredName;
       const surnameForBackend = formData.lastName || '';
@@ -633,7 +645,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         name: nameForBackend,
         surname: surnameForBackend,
         email: formData.email,
-        password: password.trim(),
+        password: trimmedPassword,
         conferenceCode,
         termsAccepted: formData.codeOfConduct,
         privacyAccepted: formData.photographyConsent
@@ -643,6 +655,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(conferenceApiKey ? { Authorization: `Bearer ${conferenceApiKey}` } : {}),
         },
         body: JSON.stringify(payload),
       });
@@ -664,6 +677,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              ...(conferenceApiKey ? { Authorization: `Bearer ${conferenceApiKey}` } : {}),
             },
             body: JSON.stringify({
               phone: formData.phone,
@@ -1029,6 +1043,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
                       <input 
                         required
+                        minLength={MIN_PASSWORD_LENGTH}
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Create a secure password"
                         className="w-full pl-12 pr-12 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
