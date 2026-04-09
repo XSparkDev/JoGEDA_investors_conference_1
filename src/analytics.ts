@@ -208,8 +208,10 @@ export const initGoogleAnalytics = () => {
   window.dataLayer = window.dataLayer || [];
   window.gtag =
     window.gtag ||
-    function gtag(...args: unknown[]) {
-      window.dataLayer.push(args);
+    function gtag() {
+      // Match Google's recommended snippet exactly: push the raw arguments
+      // object so the loaded gtag runtime can process commands correctly.
+      window.dataLayer.push(arguments);
     };
   logGoogleAnalyticsDiagnostics('init-start');
 
