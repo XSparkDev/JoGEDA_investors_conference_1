@@ -25,6 +25,7 @@ const allowedHosts = (
 
 let hasConfigured = false;
 const consentStorageKey = 'jogeda_analytics_consent';
+let gtagLoadPromise: Promise<void> | null = null;
 
 const shouldLogAnalyticsDebug = () => {
   if (typeof window === 'undefined') return false;
@@ -78,6 +79,55 @@ const inspectGoogleAnalyticsClientId = (reason: string) => {
       logGoogleAnalyticsDiagnostics('client-id-timeout', { reason });
     }
   }, 3000);
+};
+
+const ensureGoogleAnalyticsScriptLoaded = () => {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('window unavailable'));
+  }
+
+  if (typeof window.google_tag_manager !== 'undefined') {
+    logGoogleAnalyticsDiagnostics('script-already-loaded');
+    return Promise.resolve();
+  }
+
+  if (gtagLoadPromise) {
+    return gtagLoadPromise;
+  }
+
+  gtagLoadPromise = new Promise<void>((resolve, reject) => {
+    const existingScript = document.getElementById(
+      'google-gtag-script'
+    ) as HTMLScriptElement | null;
+
+    const handleLoad = () => {
+      logGoogleAnalyticsDiagnostics('script-loaded');
+      resolve();
+    };
+
+    const handleError = () => {
+      logGoogleAnalyticsDiagnostics('script-error');
+      reject(new Error('failed to load gtag script'));
+    };
+
+    if (existingScript) {
+      logGoogleAnalyticsDiagnostics('script-already-present');
+      existingScript.addEventListener('load', handleLoad, { once: true });
+      existingScript.addEventListener('error', handleError, { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.id = 'google-gtag-script';
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
+    script.addEventListener('load', handleLoad, { once: true });
+    script.addEventListener('error', handleError, { once: true });
+    document.head.appendChild(script);
+    logGoogleAnalyticsDiagnostics('script-appended');
+  });
+
+  return gtagLoadPromise;
 };
 
 const hostMatches = (hostname: string, pattern: string) => {
@@ -163,34 +213,26 @@ export const initGoogleAnalytics = () => {
     };
   logGoogleAnalyticsDiagnostics('init-start');
 
-  if (!document.getElementById('google-gtag-script')) {
-    const script = document.createElement('script');
-    script.id = 'google-gtag-script';
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${measurementId}`;
-    script.onload = () => {
-      logGoogleAnalyticsDiagnostics('script-loaded');
-      inspectGoogleAnalyticsClientId('script-loaded');
-    };
-    script.onerror = () => {
-      logGoogleAnalyticsDiagnostics('script-error');
-    };
-    document.head.appendChild(script);
-    logGoogleAnalyticsDiagnostics('script-appended');
-  } else {
-    logGoogleAnalyticsDiagnostics('script-already-present');
-  }
+  void ensureGoogleAnalyticsScriptLoaded()
+    .then(() => {
+      applyGoogleAnalyticsConsent(getStoredAnalyticsConsent());
 
-  if (!hasConfigured) {
-    applyGoogleAnalyticsConsent(getStoredAnalyticsConsent());
-    window.gtag('js', new Date());
-    window.gtag('config', measurementId);
-    logGoogleAnalyticsDiagnostics('config-called');
-    inspectGoogleAnalyticsClientId('config-called');
-    hasConfigured = true;
-  } else {
-    logGoogleAnalyticsDiagnostics('config-skipped-already-configured');
-  }
+      if (!hasConfigured) {
+        window.gtag('js', new Date());
+        window.gtag('config', measurementId, { send_page_view: true });
+        logGoogleAnalyticsDiagnostics('config-called-after-load');
+        hasConfigured = true;
+      } else {
+        logGoogleAnalyticsDiagnostics('config-skipped-already-configured');
+      }
+
+      inspectGoogleAnalyticsClientId('post-load-config');
+    })
+    .catch((error) => {
+      logGoogleAnalyticsDiagnostics('init-load-failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
 
   return true;
 };
