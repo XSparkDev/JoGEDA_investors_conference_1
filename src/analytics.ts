@@ -69,6 +69,23 @@ export const setGoogleAnalyticsDisabled = (disabled: boolean) => {
   (window as any)[`ga-disable-${measurementId}`] = disabled;
 };
 
+export const applyGoogleAnalyticsConsent = (consent: AnalyticsConsentState) => {
+  if (typeof window === 'undefined' || !measurementId) return;
+  if (typeof window.gtag !== 'function') return;
+
+  // If the user hasn't answered yet, don't send any consent updates.
+  // This avoids accidentally "denying" in a way that prevents later dispatch.
+  if (consent === 'unset') return;
+
+  // GA4 Consent Mode: explicitly grant/deny analytics storage.
+  // We keep ad_storage denied since we're not running ads tracking here.
+  const analytics_storage = consent === 'granted' ? 'granted' : 'denied';
+  window.gtag('consent', 'update', {
+    analytics_storage,
+    ad_storage: 'denied',
+  });
+};
+
 export const initGoogleAnalytics = () => {
   if (!shouldEnableGoogleAnalytics()) return false;
 
@@ -88,6 +105,7 @@ export const initGoogleAnalytics = () => {
   }
 
   if (!hasConfigured) {
+    applyGoogleAnalyticsConsent(getStoredAnalyticsConsent());
     window.gtag('js', new Date());
     window.gtag('config', measurementId);
     hasConfigured = true;

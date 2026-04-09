@@ -11,6 +11,7 @@ import { AttendeeDashboard } from './components/AttendeeDashboard';
 import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner';
 import {
   getStoredAnalyticsConsent,
+  applyGoogleAnalyticsConsent,
   initGoogleAnalytics,
   setGoogleAnalyticsDisabled,
   setStoredAnalyticsConsent,
@@ -72,9 +73,13 @@ export default function App() {
     if (analyticsConsent === 'granted') {
       setGoogleAnalyticsDisabled(false);
       initGoogleAnalytics();
+      applyGoogleAnalyticsConsent('granted');
       return;
     }
 
+    if (analyticsConsent === 'denied') {
+      applyGoogleAnalyticsConsent('denied');
+    }
     setGoogleAnalyticsDisabled(true);
   }, [view, analyticsConsent]);
 
