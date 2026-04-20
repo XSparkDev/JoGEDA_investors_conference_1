@@ -9,10 +9,88 @@
       name="description"
       content="The 4th Annual Investment Conference hosted by the Joe Gqabi Economic Development Agency (JoGEDA) in partnership with the Joe Gqabi District."
     />
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('install') !== '1') {
+          window.__SKIP_APP_BOOT__ = false;
+          return;
+        }
+
+        window.__SKIP_APP_BOOT__ = true;
+
+        var rawAppleUrl = '%VITE_APPLE_APP_URL%';
+        var rawGoogleUrl = '%VITE_GOOGLE_PLAY_URL%';
+        var sanitizeUrl = function (value) {
+          if (!value) return '';
+          if (value.slice(0, 6) === '%VITE_' && value.charAt(value.length - 1) === '%') return '';
+          return value;
+        };
+
+        var appleUrl = sanitizeUrl(rawAppleUrl);
+        var googleUrl = sanitizeUrl(rawGoogleUrl);
+        var ua = navigator.userAgent || '';
+        var platform = navigator.platform || '';
+        var maxTouchPoints = navigator.maxTouchPoints || 0;
+        var isIOS =
+          /iPad|iPhone|iPod/i.test(ua) ||
+          (platform === 'MacIntel' && maxTouchPoints > 1);
+        var isAndroid = /Android/i.test(ua);
+        var targetUrl = isIOS ? appleUrl : isAndroid ? googleUrl : '';
+
+        var renderFallback = function () {
+          var root = document.getElementById('root');
+          if (!root) {
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', renderFallback, { once: true });
+            }
+            return;
+          }
+
+          root.innerHTML =
+            '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#fff;padding:24px;font-family:Arial,sans-serif;">' +
+            '<div style="width:100%;max-width:420px;border:1px solid #e4e4e7;border-radius:16px;padding:24px;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,0.08);">' +
+            '<h1 style="margin:0;font-size:24px;color:#18181b;">Download XS Card</h1>' +
+            '<p style="margin:12px 0 0;color:#52525b;font-size:14px;line-height:1.5;">Choose your app store to continue.</p>' +
+            (!appleUrl && !googleUrl
+              ? '<p style="margin:16px 0 0;color:#dc2626;font-size:14px;font-weight:600;line-height:1.5;">App store links are not configured yet. Please contact the event team.</p>'
+              : '<div style="display:grid;gap:12px;margin-top:20px;">' +
+                (appleUrl
+                  ? '<a href="' +
+                    appleUrl +
+                    '" style="display:block;border-radius:12px;padding:14px 16px;background:#000;color:#fff;text-decoration:none;font-size:14px;font-weight:700;">Download on App Store</a>'
+                  : '') +
+                (googleUrl
+                  ? '<a href="' +
+                    googleUrl +
+                    '" style="display:block;border-radius:12px;padding:14px 16px;background:#97bf0d;color:#1a1a1a;text-decoration:none;font-size:14px;font-weight:700;">Download on Google Play</a>'
+                  : '') +
+                '</div>') +
+            '</div>' +
+            '</div>';
+        };
+
+        if (targetUrl) {
+          window.setTimeout(renderFallback, 2000);
+          window.location.replace(targetUrl);
+          return;
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', renderFallback, { once: true });
+        } else {
+          renderFallback();
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module">
+      if (!window.__SKIP_APP_BOOT__) {
+        import('/src/main.tsx');
+      }
+    </script>
   </body>
 </html>
 
