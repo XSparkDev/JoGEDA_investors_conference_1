@@ -25,12 +25,8 @@ export default function App() {
 
   const redirectedRef = useRef(false);
 
-  const googlePlayUrl =
-    (import.meta as any).env?.VITE_GOOGLE_PLAY_URL ||
-    (typeof process !== 'undefined' ? (process as any).env?.VITE_GOOGLE_PLAY_URL : '');
-  const appleAppUrl =
-    (import.meta as any).env?.VITE_APPLE_APP_URL ||
-    (typeof process !== 'undefined' ? (process as any).env?.VITE_APPLE_APP_URL : '');
+  const googlePlayUrl = 'https://play.google.com/store/apps/details?id=com.p.zzles.xscard';
+  const appleAppUrl = 'https://apps.apple.com/us/app/xs-card/id6742452317';
 
   const installRedirectRequested =
     typeof window !== 'undefined'

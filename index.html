@@ -19,16 +19,8 @@
 
         window.__SKIP_APP_BOOT__ = true;
 
-        var rawAppleUrl = '%VITE_APPLE_APP_URL%';
-        var rawGoogleUrl = '%VITE_GOOGLE_PLAY_URL%';
-        var sanitizeUrl = function (value) {
-          if (!value) return '';
-          if (value.slice(0, 6) === '%VITE_' && value.charAt(value.length - 1) === '%') return '';
-          return value;
-        };
-
-        var appleUrl = sanitizeUrl(rawAppleUrl);
-        var googleUrl = sanitizeUrl(rawGoogleUrl);
+        var appleUrl = 'https://apps.apple.com/us/app/xs-card/id6742452317';
+        var googleUrl = 'https://play.google.com/store/apps/details?id=com.p.zzles.xscard';
         var ua = navigator.userAgent || '';
         var platform = navigator.platform || '';
         var maxTouchPoints = navigator.maxTouchPoints || 0;
