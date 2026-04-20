@@ -12,14 +12,8 @@ const port = process.env.PORT || 4000;
 
 app.use(express.json({ limit: '10mb' }));
 
-const appleAppUrl =
-  process.env.VITE_APPLE_APP_URL ||
-  process.env.APPLE_APP_URL ||
-  '';
-const googlePlayUrl =
-  process.env.VITE_GOOGLE_PLAY_URL ||
-  process.env.GOOGLE_PLAY_URL ||
-  '';
+const appleAppUrl = 'https://apps.apple.com/us/app/xs-card/id6742452317';
+const googlePlayUrl = 'https://play.google.com/store/apps/details?id=com.p.zzles.xscard';
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
