@@ -12,6 +12,15 @@ const port = process.env.PORT || 4000;
 
 app.use(express.json({ limit: '10mb' }));
 
+const appleAppUrl =
+  process.env.VITE_APPLE_APP_URL ||
+  process.env.APPLE_APP_URL ||
+  '';
+const googlePlayUrl =
+  process.env.VITE_GOOGLE_PLAY_URL ||
+  process.env.GOOGLE_PLAY_URL ||
+  '';
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -69,6 +78,89 @@ if (!supabaseAdmin) {
       'Registration mirroring will be disabled until these are set.'
   );
 }
+
+// Fast app store redirect for QR install links.
+// This runs before static serving so users are not blocked on SPA boot time.
+app.get('/', (req, res, next) => {
+  if (req.query.install !== '1') return next();
+
+  const ua = String(req.headers['user-agent'] || '');
+  const isAndroid = /Android/i.test(ua);
+  const isIOS =
+    /iPad|iPhone|iPod/i.test(ua) ||
+    (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
+
+  if (isIOS && appleAppUrl) {
+    return res.redirect(302, appleAppUrl);
+  }
+
+  if (isAndroid && googlePlayUrl) {
+    return res.redirect(302, googlePlayUrl);
+  }
+
+  const noStoreLinksConfigured = !appleAppUrl && !googlePlayUrl;
+  return res.status(noStoreLinksConfigured ? 500 : 200).send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Download XS Card</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Arial, sans-serif;
+        background: #f5f5f5;
+        color: #111827;
+      }
+      .card {
+        width: min(420px, calc(100vw - 32px));
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        text-align: center;
+      }
+      .links {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+      }
+      a {
+        display: block;
+        border-radius: 12px;
+        padding: 14px 16px;
+        text-decoration: none;
+        font-weight: 700;
+        color: #ffffff;
+      }
+      .apple { background: #111111; }
+      .google { background: #6b8e23; }
+      .warn {
+        margin-top: 12px;
+        color: #b91c1c;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Download XS Card</h1>
+      <p>Choose your app store to continue.</p>
+      <div class="links">
+        ${appleAppUrl ? `<a class="apple" href="${appleAppUrl}">Download on App Store</a>` : ''}
+        ${googlePlayUrl ? `<a class="google" href="${googlePlayUrl}">Download on Google Play</a>` : ''}
+      </div>
+      ${noStoreLinksConfigured ? '<p class="warn">App store links are not configured yet. Please contact the event team.</p>' : ''}
+    </main>
+  </body>
+</html>`);
+});
 
 // --- Static app hosting (serves Vite build) ---
 const distDir = path.join(process.cwd(), 'dist');

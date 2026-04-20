@@ -146,7 +146,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
                   <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
                     <Calendar className="text-jogeda-green w-5 h-5" />
                   </div>
-                  <span className="font-black uppercase tracking-widest text-sm">4th &amp; 5th of June 2026</span>
+                  <span className="font-black uppercase tracking-widest text-sm">4th of June 2026</span>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center">
@@ -616,7 +616,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   // When scanned (typically by a phone), the redirect page forwards to the correct app store.
   const installRedirectUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}${window.location.pathname}?install=1&cardIndex=1`
+      ? `${window.location.origin}${window.location.pathname}?install=1`
       : '';
 
   const handleSubmit = async (e: React.FormEvent) => {

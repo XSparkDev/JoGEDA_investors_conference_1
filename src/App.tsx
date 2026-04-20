@@ -21,6 +21,7 @@ import {
 
 export default function App() {
   type ViewMode = 'landing' | 'registration' | 'admin';
+  const REDIRECT_TIMEOUT_MS = 2000;
 
   const redirectedRef = useRef(false);
 
@@ -46,6 +47,7 @@ export default function App() {
   const [analyticsConsent, setAnalyticsConsent] = useState<AnalyticsConsentState>(() =>
     getStoredAnalyticsConsent()
   );
+  const [showInstallFallback, setShowInstallFallback] = useState(false);
 
   const handleRegister = () => {
     setView('registration');
@@ -90,16 +92,28 @@ export default function App() {
         redirectedRef.current = true;
 
         const ua = navigator.userAgent || '';
-        const isIOS = /iPad|iPhone|iPod/.test(ua);
-        const targetUrl = isIOS ? appleAppUrl : googlePlayUrl;
+        const platform = navigator.platform || '';
+        const maxTouchPoints = navigator.maxTouchPoints || 0;
+
+        const isIOS =
+          /iPad|iPhone|iPod/.test(ua) ||
+          (platform === 'MacIntel' && maxTouchPoints > 1);
+        const isAndroid = /Android/i.test(ua);
+        const targetUrl = isIOS ? appleAppUrl : isAndroid ? googlePlayUrl : '';
 
         if (targetUrl) {
           window.location.replace(targetUrl);
-          return;
+
+          // Safety net: if navigation does not complete, show manual buttons.
+          const timerId = window.setTimeout(() => {
+            setShowInstallFallback(true);
+          }, REDIRECT_TIMEOUT_MS);
+          return () => window.clearTimeout(timerId);
         }
 
-        // If config is missing, just fall through to normal SPA view.
-        console.warn('Install redirect requested but store URLs are missing.');
+        // Unknown OS or missing store URLs: show fallback actions immediately.
+        setShowInstallFallback(true);
+        console.warn('Install redirect requested but no matching app store URL is configured.');
       }
     }
 
@@ -113,13 +127,44 @@ export default function App() {
 
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
-  }, [view]);
+  }, [view, installRedirectRequested, appleAppUrl, googlePlayUrl]);
 
   return (
     <div className="relative">
       {installRedirectRequested ? (
-        <div className="min-h-screen flex items-center justify-center bg-white text-zinc-600 text-sm font-bold">
-          Redirecting to the app store...
+        <div className="min-h-screen flex items-center justify-center bg-white px-6">
+          {showInstallFallback ? (
+            <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+              <h1 className="text-lg font-black text-jogeda-dark">Download XS Card</h1>
+              <p className="mt-2 text-sm text-zinc-600">Choose your app store to continue.</p>
+              {!appleAppUrl && !googlePlayUrl ? (
+                <p className="mt-4 text-sm font-semibold text-red-600">
+                  App store links are not configured yet. Please contact the event team.
+                </p>
+              ) : (
+                <div className="mt-5 grid gap-3">
+                  {appleAppUrl ? (
+                    <a
+                      href={appleAppUrl}
+                      className="rounded-xl bg-black px-4 py-3 text-sm font-black text-white transition-opacity hover:opacity-90"
+                    >
+                      Download on App Store
+                    </a>
+                  ) : null}
+                  {googlePlayUrl ? (
+                    <a
+                      href={googlePlayUrl}
+                      className="rounded-xl bg-jogeda-green px-4 py-3 text-sm font-black text-jogeda-dark transition-opacity hover:opacity-90"
+                    >
+                      Download on Google Play
+                    </a>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm font-bold text-zinc-600">Redirecting to the app store...</p>
+          )}
         </div>
       ) : null}
       <AnimatePresence mode="wait">
