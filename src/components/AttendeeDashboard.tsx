@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, CheckCircle2, RefreshCw, Search, UserPlus, X } from 'lucide-react';
+import QRCode from 'react-qr-code';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { QrScanner } from './QrScanner';
 import { RegistrationForm } from '../templates/Templates';
 
@@ -28,12 +31,16 @@ export function AttendeeDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scanMessage, setScanMessage] = useState<string | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [lastScanValue, setLastScanValue] = useState<string | null>(null);
-  const [hasOpenedUrlForScan, setHasOpenedUrlForScan] = useState(false);
+  const [scanToast, setScanToast] = useState<{
+    tone: 'success' | 'warning' | 'error';
+    title: string;
+    body: string;
+  } | null>(null);
+  const [scanProcessing, setScanProcessing] = useState(false);
+  const lastScanRef = useRef<{ value: string; at: number } | null>(null);
   const [showRegisteredModal, setShowRegisteredModal] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [pendingExportFormat, setPendingExportFormat] = useState<ExportFormat | null>(null);
@@ -50,6 +57,8 @@ export function AttendeeDashboard() {
   const [previewFileName, setPreviewFileName] = useState('headshot');
   const [previewAttendee, setPreviewAttendee] = useState<Attendee | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const pdfExportRef = useRef<HTMLDivElement | null>(null);
   const supabaseFunctionsBaseUrl =
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
@@ -64,15 +73,38 @@ export function AttendeeDashboard() {
     (import.meta as any).env?.CONFERENCE_CODE ||
     (typeof process !== 'undefined' ? (process as any).env?.CONFERENCE_CODE : '');
 
-  const fetchAttendees = async () => {
-    setLoading(true);
-    setError(null);
+  const formatRegisteredDate = (value?: string) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    const formattedDate = date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+    const formattedTime = date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    return `${formattedDate} · ${formattedTime}`;
+  };
+
+  const fetchAttendees = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       if (!supabaseFunctionsBaseUrl) {
         throw new Error('Supabase functions base URL is not configured.');
       }
 
-      const url = new URL(`${supabaseFunctionsBaseUrl}/list-attendees`);
+      const normalizedBase = supabaseFunctionsBaseUrl.replace(/\/+$/, '');
+      const listAttendeesEndpoint = normalizedBase.endsWith('/list-attendees')
+        ? normalizedBase
+        : `${normalizedBase}/list-attendees`;
+      const url = new URL(listAttendeesEndpoint);
       url.searchParams.set('conferenceCode', conferenceCode);
 
       const res = await fetch(url.toString(), {
@@ -86,7 +118,17 @@ export function AttendeeDashboard() {
         },
       });
       if (!res.ok) {
-        throw new Error('Failed to load attendees');
+        const text = await res.text();
+        let detail = `${res.status} ${res.statusText}`;
+        try {
+          const errBody = JSON.parse(text) as { error?: string; message?: string };
+          if (errBody?.message) detail += `: ${errBody.message}`;
+          else if (errBody?.error) detail += `: ${errBody.error}`;
+          else if (text) detail += `: ${text.slice(0, 200)}`;
+        } catch {
+          if (text) detail += `: ${text.slice(0, 200)}`;
+        }
+        throw new Error(detail);
       }
       const data = (await res.json()) as { attendees?: Attendee[] };
       const loaded = data.attendees || [];
@@ -99,10 +141,18 @@ export function AttendeeDashboard() {
       );
     } catch (err) {
       console.error('Failed to fetch attendees', err);
-      setError('Unable to load attendees.');
+      const msg =
+        err instanceof Error && err.message
+          ? `Unable to load attendees. ${err.message}`
+          : 'Unable to load attendees.';
+      if (!silent) {
+        setError(msg);
+      }
       setAttendees([]);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -111,6 +161,19 @@ export function AttendeeDashboard() {
     const id = window.setTimeout(() => setToast(null), 4500);
     return () => window.clearTimeout(id);
   }, [toast]);
+
+  useEffect(() => {
+    if (!scanToast) return;
+    const id = window.setTimeout(() => setScanToast(null), 3600);
+    return () => window.clearTimeout(id);
+  }, [scanToast]);
+
+  useEffect(() => {
+    if (!scannerOpen) {
+      setScanProcessing(false);
+      lastScanRef.current = null;
+    }
+  }, [scannerOpen]);
 
   const openExportConfirm = (format: ExportFormat) => {
     setPendingExportFormat(format);
@@ -204,6 +267,16 @@ export function AttendeeDashboard() {
     }
   };
 
+  const runLogout = () => {
+    if (typeof window === 'undefined') return;
+    if (loggingOut) return;
+    setLoggingOut(true);
+    window.setTimeout(() => {
+      window.sessionStorage.removeItem('jogeda_admin_authed');
+      window.location.href = `${window.location.pathname}${window.location.search}`;
+    }, 700);
+  };
+
   useEffect(() => {
     fetchAttendees();
   }, []);
@@ -244,25 +317,88 @@ export function AttendeeDashboard() {
     [attendees]
   );
 
-  const canPreviewHeadshot = (attendee: Attendee) =>
-    Boolean(attendee.photoConsent && attendee.headshotPath);
+  const getAttendeeQrValue = (attendee: Attendee) => {
+    const linkedId = attendee.xsUserId || String(attendee.id);
+    return `https://joegqabiinvestment.co.za/?userId=${encodeURIComponent(linkedId)}`;
+  };
 
-  const openHeadshotPreview = async (attendee: Attendee) => {
-    if (!canPreviewHeadshot(attendee)) {
+  const extractUserIdFromScan = (raw: string) => {
+    const cleaned = raw.trim();
+    if (!cleaned) return '';
+    try {
+      const looksLikeUrl = /^https?:\/\//i.test(cleaned) || /^www\./i.test(cleaned);
+      if (!looksLikeUrl) return cleaned;
+      const normalized = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
+      const urlObj = new URL(normalized);
+      return (
+        (urlObj.searchParams.get('userId') ||
+          urlObj.searchParams.get('uid') ||
+          urlObj.searchParams.get('xsUserId') ||
+          '') as string
+      ).trim();
+    } catch {
+      return cleaned;
+    }
+  };
+
+  const getBadgeFileName = (attendee: Attendee) => {
+    const fullName = (attendee.name || 'Attendee').trim();
+    const parts = fullName.split(/\s+/).filter(Boolean);
+    const firstName = (parts[0] || 'Attendee').replace(/[^a-zA-Z0-9_-]/g, '');
+    const lastName = (parts.slice(1).join('_') || 'Badge').replace(/[^a-zA-Z0-9_-]/g, '');
+    return `${firstName}_${lastName}_Badge.pdf`;
+  };
+
+  const downloadHeadshotPdf = async () => {
+    if (!previewAttendee || !pdfExportRef.current) return;
+    setDownloadingPdf(true);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+      const canvas = await html2canvas(pdfExportRef.current, {
+        scale: 3,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+      });
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a5',
+      });
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      pdf.addImage(imageData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+      pdf.save(getBadgeFileName(previewAttendee));
+    } catch (err) {
+      console.error('Failed to generate attendee badge PDF', err);
       setToast({
         type: 'error',
-        title: 'No Preview Available',
-        body: 'No consented headshot is available for this attendee.',
+        title: 'Download Failed',
+        body: 'Could not generate the attendee PDF. Please try again.',
       });
-      return;
+    } finally {
+      setDownloadingPdf(false);
     }
+  };
 
+  const openHeadshotPreview = async (attendee: Attendee) => {
     if (!supabaseFunctionsBaseUrl) {
       setToast({
         type: 'error',
         title: 'Config Error',
         body: 'Supabase functions URL is not configured.',
       });
+      return;
+    }
+
+    setPreviewAttendee(attendee);
+    if (previewImageUrl) {
+      URL.revokeObjectURL(previewImageUrl);
+      setPreviewImageUrl(null);
+    }
+
+    if (!attendee.photoConsent || !attendee.headshotPath) {
+      setShowPreviewModal(true);
       return;
     }
 
@@ -328,7 +464,7 @@ export function AttendeeDashboard() {
   return (
     <div className="min-h-screen bg-zinc-50 flex items-start justify-center p-6 md:p-10 font-sans">
       <div className="w-full max-w-6xl bg-white rounded-[2rem] shadow-2xl border border-zinc-100 p-6 md:p-10">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-8">
+        <div className="flex items-start justify-between gap-4 mb-8">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-jogeda-green mb-2">
               Internal Tool
@@ -341,7 +477,17 @@ export function AttendeeDashboard() {
               check-ins.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={runLogout}
+            disabled={loggingOut}
+            className="inline-flex h-8 items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 text-[10px] font-black uppercase tracking-[0.14em] text-zinc-600 hover:border-red-200 hover:text-red-600 transition-colors shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loggingOut ? 'Logging out...' : 'Log out'}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-3 mb-8">
             <button
               type="button"
               onClick={fetchAttendees}
@@ -353,10 +499,8 @@ export function AttendeeDashboard() {
             <button
               type="button"
               onClick={() => {
-                setLastScanValue(null);
-                setScanError(null);
-                setScanMessage(null);
-                setHasOpenedUrlForScan(false);
+                setScanToast(null);
+                setScanProcessing(false);
                 setShowRegisteredModal(false);
                 setScannerOpen(true);
               }}
@@ -365,7 +509,6 @@ export function AttendeeDashboard() {
               <Camera className="w-4 h-4" />
               Open Scanner
             </button>
-          </div>
         </div>
 
         <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -452,36 +595,15 @@ export function AttendeeDashboard() {
           </div>
         )}
 
-        {(scanMessage || scanError || lastScanValue) && (
-          <div className="mb-4 rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-xs">
-            {lastScanValue && (
-              <p className="mb-1">
-                <span className="font-black uppercase tracking-[0.18em] text-jogeda-dark">
-                  Last Scan:
-                </span>{' '}
-                <span className="font-mono break-all text-[11px] text-zinc-700">
-                  {lastScanValue}
-                </span>
-              </p>
-            )}
-            {scanMessage && (
-              <p className="text-[11px] font-medium text-jogeda-green">{scanMessage}</p>
-            )}
-            {scanError && (
-              <p className="text-[11px] font-medium text-red-500">{scanError}</p>
-            )}
-          </div>
-        )}
-
         <div className="overflow-x-auto rounded-2xl border border-zinc-100">
           <table className="min-w-full text-left text-xs">
             <thead className="bg-zinc-50 border-b border-zinc-100">
               <tr className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3 min-w-[180px]">Name</th>
+                <th className="px-4 py-3 min-w-[210px]">Email</th>
                 <th className="px-4 py-3 hidden md:table-cell">Organisation</th>
-                <th className="px-4 py-3 hidden md:table-cell">Phone</th>
-                <th className="px-4 py-3 hidden md:table-cell">Investment Focus</th>
+                <th className="px-4 py-3 hidden md:table-cell min-w-[140px]">Phone</th>
+                <th className="px-4 py-3 hidden md:table-cell min-w-[180px]">Investment Focus</th>
                 <th className="px-4 py-3 hidden lg:table-cell">Registered</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -501,26 +623,32 @@ export function AttendeeDashboard() {
                     key={attendee.id}
                     className="border-b border-zinc-50 hover:bg-zinc-50/70 transition-colors"
                   >
-                    <td className="px-4 py-3 text-sm font-semibold text-zinc-900 break-words">
+                    <td className="px-4 py-3 text-sm font-semibold text-zinc-900 break-words min-w-[180px]">
                       {attendee.name}
                     </td>
-                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all">{attendee.email}</td>
+                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all min-w-[210px]">{attendee.email}</td>
                     <td className="px-4 py-3 text-[11px] text-zinc-600 break-all hidden md:table-cell">
                       {attendee.organisation || '—'}
                     </td>
-                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all hidden md:table-cell">
+                    <td className="px-4 py-3 text-[11px] text-zinc-600 whitespace-nowrap hidden md:table-cell min-w-[140px]">
                       {attendee.phone || '—'}
                     </td>
-                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all hidden md:table-cell">
+                    <td className="px-4 py-3 text-[11px] text-zinc-600 break-all hidden md:table-cell min-w-[180px]">
                       {attendee.investmentFocus || '—'}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-zinc-500 hidden lg:table-cell">
                       {attendee.status === 'Confirmed' ? (
-                        <span className="inline-flex items-center justify-center rounded-lg bg-jogeda-green px-3 py-1 font-black uppercase tracking-[0.12em] text-jogeda-dark">
-                          Confirmed
-                        </span>
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center justify-center rounded-lg bg-jogeda-green px-3 py-1 font-black uppercase tracking-[0.12em] text-jogeda-dark">
+                            Confirmed
+                          </span>
+                          <p className="text-[11px] text-zinc-400">{formatRegisteredDate(attendee.createdAt)}</p>
+                        </div>
                       ) : (
-                        attendee.status ?? 'Registered'
+                        <div className="space-y-1">
+                          <span>{attendee.status ?? 'Registered'}</span>
+                          <p className="text-[11px] text-zinc-400">{formatRegisteredDate(attendee.createdAt)}</p>
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-[11px] text-right">
@@ -545,9 +673,9 @@ export function AttendeeDashboard() {
                           <div className="absolute right-0 mt-2 w-44 rounded-xl border border-zinc-200 bg-white shadow-lg z-20 overflow-hidden">
                             <button
                               type="button"
-                              disabled={attendee.status === 'Confirmed' || !attendee.email}
+                              disabled={!attendee.email || !attendee.xsUserId}
                               className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors ${
-                                attendee.status === 'Confirmed' || !attendee.email
+                                !attendee.email || !attendee.xsUserId
                                   ? 'text-zinc-400 cursor-default bg-zinc-50'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white'
                               }`}
@@ -564,7 +692,16 @@ export function AttendeeDashboard() {
                                       return;
                                     }
 
-                                    const res = await fetch(`${supabaseFunctionsBaseUrl}/mark-email-verified`, {
+                                    if (!attendee.email || !attendee.xsUserId) {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Missing Delegate Data',
+                                        body: 'This delegate is missing email or XS userId in Supabase.',
+                                      });
+                                      return;
+                                    }
+
+                                    const verifyRes = await fetch(`${supabaseFunctionsBaseUrl}/mark-email-verified`, {
                                       method: 'POST',
                                       headers: {
                                         'Content-Type': 'application/json',
@@ -581,76 +718,21 @@ export function AttendeeDashboard() {
                                       }),
                                     });
 
-                                    const data = await res
+                                    const verifyData = await verifyRes
                                       .json()
                                       .catch(() => ({} as any));
 
-                                    const verifySuccess = Boolean((data as any).success);
-
-                                    if (!res.ok || !verifySuccess) {
+                                    const verifySuccess = Boolean((verifyData as any).success);
+                                    if (!verifyRes.ok || !verifySuccess) {
                                       setToast({
                                         type: 'error',
                                         title: 'Verify Failed',
                                         body:
-                                          (data &&
-                                            (data.message as string | undefined)) ||
-                                          (res.ok
+                                          (verifyData &&
+                                            (verifyData.message as string | undefined)) ||
+                                          (verifyRes.ok
                                             ? 'Delegate email could not be marked as verified.'
                                             : 'Verify request failed. Please try again.'),
-                                      });
-                                      return;
-                                    }
-
-                                    setToast({
-                                      type: 'success',
-                                      title: 'Verified',
-                                      body:
-                                        (data &&
-                                          (data.message as string | undefined)) ||
-                                        'Delegate email verification succeeded.',
-                                    });
-
-                                    await fetchAttendees();
-                                  } catch (err) {
-                                    console.error('Verify failed', err);
-                                    setToast({
-                                      type: 'error',
-                                      title: 'Network Error',
-                                      body: 'We could not reach the verify service. Please try again.',
-                                    });
-                                  }
-                                })();
-                              }}
-                            >
-                              Verify
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={attendee.status === 'Confirmed' || !attendee.emailVerified}
-                              className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors border-t ${
-                                attendee.status === 'Confirmed' || !attendee.emailVerified
-                                  ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
-                                  : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
-                              }`}
-                              onClick={() => {
-                                (async () => {
-                                  setOpenActionForId(null);
-                                  try {
-                                    if (!supabaseFunctionsBaseUrl) {
-                                      setToast({
-                                        type: 'error',
-                                        title: 'Config Error',
-                                        body: 'Supabase functions URL is not configured.',
-                                      });
-                                      return;
-                                    }
-
-                                    if (!attendee.xsUserId) {
-                                      setToast({
-                                        type: 'error',
-                                        title: 'Missing Delegate ID',
-                                        body: 'This delegate does not have a valid XS userId in Supabase.',
                                       });
                                       return;
                                     }
@@ -703,10 +785,10 @@ export function AttendeeDashboard() {
 
                                     setToast({
                                       type: 'success',
-                                      title: 'Checked In',
+                                      title: 'Verified',
                                       body:
                                         (data && (data.message as string | undefined)) ||
-                                        'This delegate has been checked in successfully.',
+                                        'Delegate has been verified and checked in successfully.',
                                     });
 
                                     await fetchAttendees();
@@ -721,17 +803,13 @@ export function AttendeeDashboard() {
                                 })();
                               }}
                             >
-                              {attendee.status === 'Confirmed'
-                                ? 'Checked In'
-                                : !attendee.emailVerified
-                                  ? 'Verify First'
-                                : 'Check In'}
+                              Verify
                             </button>
                             <button
                               type="button"
-                              disabled={!canPreviewHeadshot(attendee) || previewLoading}
+                              disabled={previewLoading}
                               className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors border-t ${
-                                !canPreviewHeadshot(attendee) || previewLoading
+                                previewLoading
                                   ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
                                   : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
                               }`}
@@ -777,35 +855,55 @@ export function AttendeeDashboard() {
               </div>
               <QrScanner
                 onResult={(value) => {
+                  if (scanProcessing) return;
                   const cleaned = value.trim();
-                  setLastScanValue(cleaned);
-                  setScanError(null);
-                  setScanMessage(null);
-                  setHasOpenedUrlForScan(true);
+                  const now = Date.now();
+                  if (
+                    lastScanRef.current &&
+                    lastScanRef.current.value === cleaned &&
+                    now - lastScanRef.current.at < 3000
+                  ) {
+                    return;
+                  }
+                  lastScanRef.current = { value: cleaned, at: now };
 
-                  // Extract uid from scanned URL and call Supabase check-in Edge Function
+                  // Extract uid from scanned QR and call Supabase check-in Edge Function
                   (async () => {
                     try {
+                      setScanProcessing(true);
                       if (!supabaseFunctionsBaseUrl) {
-                        setScanError('Supabase functions URL is not configured.');
-                        setScanMessage(null);
+                        setScanToast({
+                          tone: 'error',
+                          title: 'Attendee Not Found',
+                          body: 'QR code is not registered',
+                        });
                         return;
                       }
 
-                      let urlText = cleaned;
-                      if (!/^https?:\/\//i.test(urlText)) {
-                        urlText = `https://${urlText}`;
-                      }
-
-                      const urlObj = new URL(urlText);
-                      const userId = urlObj.searchParams.get('userId');
+                      const userId = extractUserIdFromScan(cleaned);
 
                       if (!userId) {
-                        setScanError('Scanned QR does not contain a userId.');
+                        setScanToast({
+                          tone: 'error',
+                          title: 'Attendee Not Found',
+                          body: 'QR code is not registered',
+                        });
                         return;
                       }
 
-                      setScanMessage('Checking delegate status...');
+                      const attendeeBeforeScan = attendees.find(
+                        (a) =>
+                          (a.xsUserId && a.xsUserId.trim() === userId) ||
+                          String(a.id).trim() === userId
+                      );
+                      if (attendeeBeforeScan?.status === 'Confirmed') {
+                        setScanToast({
+                          tone: 'warning',
+                          title: attendeeBeforeScan.name || 'Attendee',
+                          body: 'Already Checked In',
+                        });
+                        return;
+                      }
 
                       const res = await fetch(
                         `${supabaseFunctionsBaseUrl}/checkin-attendee`,
@@ -836,70 +934,87 @@ export function AttendeeDashboard() {
                         }
                         const reason = errBody.reason as string | undefined;
                         if (reason === 'not_registered' || reason === 'registration_not_found') {
-                          setScanError('No delegate found for this QR code.');
-                          setScanMessage(null);
-                          setScannerOpen(false);
-                          setToast({
-                            type: 'error',
-                            title: 'Not Registered',
-                            body: 'We could not find a delegate linked to this QR code.',
+                          setScanToast({
+                            tone: 'error',
+                            title: 'Attendee Not Found',
+                            body: 'QR code is not registered',
                           });
                         } else if (reason === 'not_allowed') {
-                          setScanError('Delegate found but not allowed for this conference.');
-                          setScanMessage(null);
-                          setScannerOpen(false);
-                          setToast({
-                            type: 'error',
-                            title: 'Not Allowed',
-                            body: 'This delegate is not allowed for this conference.',
+                          setScanToast({
+                            tone: 'error',
+                            title: attendeeBeforeScan?.name || 'Attendee Not Allowed',
+                            body: 'This attendee is not allowed for this conference',
+                          });
+                        } else if (reason === 'email_not_verified') {
+                          setScanToast({
+                            tone: 'error',
+                            title: attendeeBeforeScan?.name || 'Email Not Verified',
+                            body: 'Delegate email is not verified yet',
                           });
                         } else {
-                          setScanError('Unable to verify delegate status.');
-                          setScanMessage(null);
-                          setScannerOpen(false);
-                          setToast({
-                            type: 'error',
-                            title: 'Check-in Error',
-                            body: 'There was an unexpected response while checking this QR code.',
+                          setScanToast({
+                            tone: 'error',
+                            title: 'Attendee Not Found',
+                            body: 'QR code is not registered',
                           });
                         }
-                        setScanMessage(null);
                         return;
                       }
 
                       // Success: delegate checked in
-                      setScanMessage(null);
-                      setScanError(null);
-                      setScannerOpen(false);
-                      setToast({
-                        type: 'success',
-                        title: 'Checked In',
-                        body: 'This delegate has been checked in successfully.',
+                      const attendeeName =
+                        attendeeBeforeScan?.name ||
+                        attendees.find(
+                          (a) =>
+                            (a.xsUserId && a.xsUserId.trim() === userId) ||
+                            String(a.id).trim() === userId
+                        )?.name ||
+                        'Attendee';
+                      setScanToast({
+                        tone: 'success',
+                        title: attendeeName,
+                        body: 'QR Code Successfully Scanned',
                       });
 
                       // Refresh attendees to reflect updated check-in state
-                      fetchAttendees();
+                      void fetchAttendees(true);
                     } catch (err) {
                       console.error('Status check failed', err);
-                      setScanError('Failed to contact status service.');
-                      setScanMessage(null);
-                      setScannerOpen(false);
-                      setToast({
-                        type: 'error',
-                        title: 'Network Error',
-                        body: 'We could not reach the check-in service. Please try again.',
+                      setScanToast({
+                        tone: 'error',
+                        title: 'Attendee Not Found',
+                        body: 'QR code is not registered',
                       });
+                    } finally {
+                      window.setTimeout(() => setScanProcessing(false), 1200);
                     }
                   })();
                 }}
                 onError={(message) => {
-                  setScanError(message);
-                  setScanMessage(null);
+                  setScanToast({
+                    tone: 'error',
+                    title: 'Camera Unavailable',
+                    body:
+                      message ||
+                      'Unable to access camera. Please check browser permissions and that a camera is available.',
+                  });
                 }}
-                onCheckInComplete={(message) => {
-                  setScanMessage(message);
-                }}
+                onCheckInComplete={() => {}}
               />
+              {scanToast && (
+                <div
+                  className={`mt-4 rounded-2xl px-4 py-3 text-white shadow-lg ${
+                    scanToast.tone === 'success'
+                      ? 'bg-green-600'
+                      : scanToast.tone === 'warning'
+                        ? 'bg-amber-500'
+                        : 'bg-red-600'
+                  }`}
+                >
+                  <p className="text-base font-black uppercase tracking-[0.06em]">{scanToast.title}</p>
+                  <p className="text-xs font-semibold mt-1">{scanToast.body}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -956,17 +1071,25 @@ export function AttendeeDashboard() {
                 </h2>
               </div>
               <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
-                {previewImageUrl ? (
-                  <img
-                    src={previewImageUrl}
-                    alt="Attendee headshot preview"
-                    className="max-h-[60vh] w-full rounded-xl object-contain bg-white"
-                  />
-                ) : (
-                  <div className="h-64 flex items-center justify-center text-sm text-zinc-500">
-                    No image available.
-                  </div>
-                )}
+                <div className="flex flex-col items-center">
+                  {previewImageUrl ? (
+                    <img
+                      src={previewImageUrl}
+                      alt="Attendee headshot preview"
+                      className="h-[300px] w-[200px] rounded-[12px] object-cover shadow-md"
+                    />
+                  ) : null}
+
+                  {previewAttendee ? (
+                    previewAttendee.xsUserId && previewAttendee.xsUserId.trim() ? (
+                      <div className="mt-3 flex items-center justify-center rounded-lg bg-white p-2">
+                        <QRCode value={previewAttendee.xsUserId.trim()} size={120} />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-zinc-500">Missing XS user ID</p>
+                    )
+                  ) : null}
+                </div>
               </div>
               {previewAttendee && (
                 <div className="mt-4 rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
@@ -1002,19 +1125,101 @@ export function AttendeeDashboard() {
                 </div>
               )}
               <div className="mt-4 flex justify-end">
-                {previewImageUrl ? (
-                  <a
-                    href={previewImageUrl}
-                    download={previewFileName}
-                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-jogeda-dark px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
+                {previewAttendee ? (
+                  <button
+                    type="button"
+                    onClick={() => void downloadHeadshotPdf()}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-jogeda-dark px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={downloadingPdf}
                   >
-                    Download
-                  </a>
+                    {downloadingPdf ? 'Downloading...' : 'Download'}
+                  </button>
                 ) : null}
               </div>
             </div>
           </div>
         )}
+        {previewAttendee ? (
+          <div className="pointer-events-none fixed left-[-99999px] top-0 opacity-0">
+            <div
+              ref={pdfExportRef}
+              style={{
+                // A5 at 96 DPI (approx): 148mm x 210mm
+                width: '560px',
+                height: '794px',
+                background: '#ffffff',
+                color: '#18181b',
+                fontFamily: 'Inter, Arial, sans-serif',
+                boxSizing: 'border-box',
+                padding: '32px 34px 30px 34px',
+              }}
+            >
+              <div style={{ fontSize: '11px', fontWeight: 900, letterSpacing: '0.24em', color: '#6B7C2D' }}>
+                ATTENDEE HEADSHOT
+              </div>
+              <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {previewImageUrl ? (
+                  <img
+                    src={previewImageUrl}
+                    alt="Attendee headshot for PDF"
+                    style={{
+                      width: '200px',
+                      height: '300px',
+                      objectFit: 'cover',
+                      borderRadius: '12px',
+                      boxShadow: '0 8px 18px rgba(0,0,0,0.14)',
+                    }}
+                  />
+                ) : null}
+                <div
+                  style={{
+                    marginTop: previewImageUrl ? '12px' : '0px',
+                    padding: '8px',
+                    borderRadius: '8px',
+                    border: '1px solid #e4e4e7',
+                    background: '#ffffff',
+                  }}
+                >
+                  <QRCode value={getAttendeeQrValue(previewAttendee)} size={120} />
+                </div>
+              </div>
+              <div style={{ marginTop: '18px', borderTop: '1px solid #d4d4d8' }} />
+              <div style={{ marginTop: '14px', fontSize: '11px', fontWeight: 900, letterSpacing: '0.2em', color: '#71717a' }}>
+                ATTENDEE DETAILS
+              </div>
+              <div
+                style={{
+                  marginTop: '12px',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  columnGap: '16px',
+                  rowGap: '8px',
+                  fontSize: '11px',
+                  lineHeight: 1.45,
+                }}
+              >
+                <p style={{ margin: 0 }}>
+                  <strong>Name:</strong> {previewAttendee.name || '—'}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Email:</strong> {previewAttendee.email || '—'}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Organisation:</strong> {previewAttendee.organisation || '—'}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Phone:</strong> {previewAttendee.phone || '—'}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Investment Focus:</strong> {previewAttendee.investmentFocus || '—'}
+                </p>
+                <p style={{ margin: 0 }}>
+                  <strong>Status:</strong> {previewAttendee.status || 'Registered'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {showRegistration && (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">

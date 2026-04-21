@@ -51,6 +51,49 @@ db.exec(
 `.trim()
 );
 
+// Local attendee list endpoint for local dashboard usage when Supabase is not configured.
+app.get('/api/attendees', (_req, res) => {
+  try {
+    const rows = db
+      .prepare(
+        `
+        SELECT id, name, email, organisation, phone, investmentFocus, createdAt
+        FROM attendees
+        ORDER BY datetime(createdAt) DESC
+      `.trim()
+      )
+      .all() as Array<{
+      id: number;
+      name: string;
+      email: string;
+      organisation?: string | null;
+      phone?: string | null;
+      investmentFocus?: string | null;
+      createdAt?: string | null;
+    }>;
+
+    const attendees = rows.map((row) => ({
+      id: row.id,
+      name: row.name || '—',
+      email: row.email || '',
+      organisation: row.organisation ?? '',
+      phone: row.phone ?? '',
+      investmentFocus: row.investmentFocus ?? '',
+      createdAt: row.createdAt ?? null,
+      status: 'Registered',
+      emailVerified: false,
+      photoConsent: false,
+      headshotPath: null,
+      headshotMime: null,
+    }));
+
+    return res.status(200).json({ ok: true, attendees });
+  } catch (error) {
+    console.error('[local attendees] failed to query sqlite attendees', error);
+    return res.status(500).json({ ok: false, message: 'Failed to load local attendees.' });
+  }
+});
+
 // --- Supabase admin client ---
 const supabaseUrl =
   process.env.SUPABASE_URL ||
