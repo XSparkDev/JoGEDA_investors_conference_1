@@ -1,16 +1,8 @@
-<<<<<<< HEAD
-import { useEffect, useMemo, useState } from 'react';
-import { Camera, CheckCircle2, RefreshCw, RotateCw, Search, UserPlus, X } from 'lucide-react';
-import { jsPDF } from 'jspdf';
-import QRCode from 'qrcode';
-import QRCodeSvg from 'react-qr-code';
-=======
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, CheckCircle2, RefreshCw, Search, UserPlus, X } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
->>>>>>> qa
 import { QrScanner } from './QrScanner';
 import { RegistrationForm } from '../templates/Templates';
 
@@ -65,13 +57,8 @@ export function AttendeeDashboard() {
   const [previewFileName, setPreviewFileName] = useState('headshot');
   const [previewAttendee, setPreviewAttendee] = useState<Attendee | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-<<<<<<< HEAD
-  const [previewRotationDeg, setPreviewRotationDeg] = useState(0);
-  const [previewPdfDownloading, setPreviewPdfDownloading] = useState(false);
-=======
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const pdfExportRef = useRef<HTMLDivElement | null>(null);
->>>>>>> qa
   const supabaseFunctionsBaseUrl =
     (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.VITE_SUPABASE_FUNCTIONS_URL : '') ||
@@ -143,26 +130,6 @@ export function AttendeeDashboard() {
         res = await fetchLocalAttendees();
       }
 
-<<<<<<< HEAD
-=======
-      const normalizedBase = supabaseFunctionsBaseUrl.replace(/\/+$/, '');
-      const listAttendeesEndpoint = normalizedBase.endsWith('/list-attendees')
-        ? normalizedBase
-        : `${normalizedBase}/list-attendees`;
-      const url = new URL(listAttendeesEndpoint);
-      url.searchParams.set('conferenceCode', conferenceCode);
-
-      const res = await fetch(url.toString(), {
-        headers: {
-          ...(supabaseAnonKey
-            ? {
-                apikey: supabaseAnonKey,
-                Authorization: `Bearer ${supabaseAnonKey}`,
-              }
-            : {}),
-        },
-      });
->>>>>>> qa
       if (!res.ok) {
         const text = await res.text();
         let detail = `${res.status} ${res.statusText}`;
@@ -368,48 +335,6 @@ export function AttendeeDashboard() {
     return `https://joegqabiinvestment.co.za/?userId=${encodeURIComponent(linkedId)}`;
   };
 
-<<<<<<< HEAD
-  const getAttendeeStatusLabel = (attendee: Attendee) => attendee.status || 'Registered';
-
-  const getAttendeeQrValue = (attendee: Attendee) => {
-    const base =
-      typeof window !== 'undefined' ? window.location.origin : 'https://joegqabiinvestment.co.za';
-    const linkedId = attendee.xsUserId || String(attendee.id);
-    return `${base}/?userId=${encodeURIComponent(linkedId)}`;
-  };
-
-  const blobUrlToDataUrl = async (blobUrl: string): Promise<string> => {
-    const res = await fetch(blobUrl);
-    const blob = await res.blob();
-
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result);
-        } else {
-          reject(new Error('Failed to encode image as data URL'));
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read image blob'));
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  const downloadHeadshotA5Pdf = async () => {
-    if (!previewImageUrl || !previewAttendee) return;
-
-    setPreviewPdfDownloading(true);
-    try {
-      const imageDataUrl = await blobUrlToDataUrl(previewImageUrl);
-      const qrDataUrl = await QRCode.toDataURL(getAttendeeQrValue(previewAttendee), {
-        errorCorrectionLevel: 'M',
-        margin: 1,
-        width: 900,
-      });
-
-      const doc = new jsPDF({
-=======
   const extractUserIdFromScan = (raw: string) => {
     const cleaned = raw.trim();
     if (!cleaned) return '';
@@ -449,86 +374,16 @@ export function AttendeeDashboard() {
       });
       const imageData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
->>>>>>> qa
         orientation: 'portrait',
         unit: 'mm',
         format: 'a5',
       });
-<<<<<<< HEAD
-
-      const pageWidth = 148;
-      const pageHeight = 210;
-      const margin = 10;
-      const cardWidth = pageWidth - margin * 2;
-      const cardHeight = pageHeight - margin * 2;
-      doc.roundedRect(margin, margin, cardWidth, cardHeight, 4, 4);
-
-      const imageSize = 46;
-      const imageX = (pageWidth - imageSize) / 2;
-      const imageY = 18;
-      const imageFormat = imageDataUrl.includes('data:image/png') ? 'PNG' : 'JPEG';
-      const normalizedRotation = ((previewRotationDeg % 360) + 360) % 360;
-      doc.addImage(
-        imageDataUrl,
-        imageFormat,
-        imageX,
-        imageY,
-        imageSize,
-        imageSize,
-        undefined,
-        'MEDIUM',
-        normalizedRotation
-      );
-
-      const qrSize = 30;
-      const qrX = (pageWidth - qrSize) / 2;
-      const qrY = imageY + imageSize + 8;
-      doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      const detailStartY = qrY + qrSize + 10;
-      const lineGap = 9;
-      const detailRows = [
-        ['Name', previewAttendee.name || '—'],
-        ['Email', previewAttendee.email || '—'],
-        ['Organisation', previewAttendee.organisation || '—'],
-        ['Phone', previewAttendee.phone || '—'],
-        ['Investment Focus', previewAttendee.investmentFocus || '—'],
-        ['Status', getAttendeeStatusLabel(previewAttendee)],
-      ];
-
-      detailRows.forEach((row, index) => {
-        const y = detailStartY + index * lineGap;
-        doc.text(`${row[0]}:`, margin + 8, y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(String(row[1]), margin + 38, y, { maxWidth: cardWidth - 44 });
-        doc.setFont('helvetica', 'bold');
-      });
-
-      doc.save(`${previewFileName || 'attendee'}-a5-card.pdf`);
-    } catch (err) {
-      console.error('PDF generation failed', err);
-      setToast({
-        type: 'error',
-        title: 'Download Failed',
-        body: 'Could not generate the A5 attendee PDF. Please try again.',
-      });
-    } finally {
-      setPreviewPdfDownloading(false);
-    }
-  };
-
-  const openHeadshotPreview = async (attendee: Attendee) => {
-    if (!canPreviewHeadshot(attendee)) {
-=======
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       pdf.addImage(imageData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       pdf.save(getBadgeFileName(previewAttendee));
     } catch (err) {
       console.error('Failed to generate attendee badge PDF', err);
->>>>>>> qa
       setToast({
         type: 'error',
         title: 'Download Failed',
@@ -599,7 +454,6 @@ export function AttendeeDashboard() {
       }
       setPreviewImageUrl(newUrl);
       setPreviewAttendee(attendee);
-      setPreviewRotationDeg(0);
       setPreviewFileName(
         `${attendee.name || 'attendee'}-headshot`
           .toLowerCase()
@@ -1216,7 +1070,6 @@ export function AttendeeDashboard() {
                 onClick={() => {
                   setShowPreviewModal(false);
                   setPreviewAttendee(null);
-                  setPreviewRotationDeg(0);
                 }}
                 className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 text-zinc-500 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors bg-white"
               >
@@ -1230,36 +1083,6 @@ export function AttendeeDashboard() {
                   Preview
                 </h2>
               </div>
-<<<<<<< HEAD
-              <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-5">
-                <div className="mx-auto flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-zinc-200 bg-white p-4">
-                  <div className="relative h-56 w-56 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
-                    {previewImageUrl ? (
-                      <img
-                        src={previewImageUrl}
-                        alt="Attendee headshot preview"
-                        className="h-full w-full object-contain transition-transform duration-200"
-                        style={{ transform: `rotate(${previewRotationDeg}deg)` }}
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center text-sm text-zinc-500">
-                        No image available.
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setPreviewRotationDeg((prev) => prev + 90)}
-                      className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-600 hover:text-jogeda-dark hover:border-jogeda-dark transition-colors"
-                      aria-label="Rotate image"
-                    >
-                      <RotateCw className="h-4 w-4" />
-                    </button>
-                  </div>
-                  {previewAttendee ? (
-                    <div className="rounded-xl border border-zinc-200 bg-white p-3">
-                      <QRCodeSvg value={getAttendeeQrValue(previewAttendee)} size={96} />
-                    </div>
-=======
               <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4">
                 <div className="flex flex-col items-center">
                   {previewImageUrl ? (
@@ -1278,7 +1101,6 @@ export function AttendeeDashboard() {
                     ) : (
                       <p className="mt-3 text-xs text-zinc-500">Missing XS user ID</p>
                     )
->>>>>>> qa
                   ) : null}
                 </div>
               </div>
@@ -1310,22 +1132,12 @@ export function AttendeeDashboard() {
                     </p>
                     <p>
                       <span className="font-black text-jogeda-dark">Status:</span>{' '}
-                      <span className="text-zinc-600">{getAttendeeStatusLabel(previewAttendee)}</span>
+                      <span className="text-zinc-600">{previewAttendee.status || 'Registered'}</span>
                     </p>
                   </div>
                 </div>
               )}
               <div className="mt-4 flex justify-end">
-<<<<<<< HEAD
-                {previewImageUrl && previewAttendee ? (
-                  <button
-                    type="button"
-                    onClick={() => void downloadHeadshotA5Pdf()}
-                    disabled={previewPdfDownloading}
-                    className="inline-flex min-h-11 items-center justify-center rounded-xl bg-jogeda-dark px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-colors"
-                  >
-                    {previewPdfDownloading ? 'Preparing PDF...' : 'Download A5 PDF'}
-=======
                 {previewAttendee ? (
                   <button
                     type="button"
@@ -1334,7 +1146,6 @@ export function AttendeeDashboard() {
                     disabled={downloadingPdf}
                   >
                     {downloadingPdf ? 'Downloading...' : 'Download'}
->>>>>>> qa
                   </button>
                 ) : null}
               </div>
