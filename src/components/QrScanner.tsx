@@ -22,9 +22,24 @@ export const QrScanner: React.FC<QrScannerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimerRef = useRef<number | null>(null);
+  const onResultRef = useRef(onResult);
+  const onErrorRef = useRef(onError);
+  const onCheckInCompleteRef = useRef(onCheckInComplete);
 
   const [status, setStatus] = useState<ScannerStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    onResultRef.current = onResult;
+  }, [onResult]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    onCheckInCompleteRef.current = onCheckInComplete;
+  }, [onCheckInComplete]);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +78,7 @@ export const QrScanner: React.FC<QrScannerProps> = ({
           'Unable to access camera. Please check browser permissions and that a camera is available.';
         setStatus('error');
         setErrorMessage(message);
-        onError?.(message);
+        onErrorRef.current?.(message);
       }
     };
 
@@ -108,11 +123,11 @@ export const QrScanner: React.FC<QrScannerProps> = ({
 
         if (result && result.data) {
           const value = result.data;
-          onResult(value);
+          onResultRef.current(value);
 
           // Delegate check-in side-effects to the parent; this component is now purely visual + decode.
-          if (onCheckInComplete) {
-            onCheckInComplete('QR code scanned successfully.');
+          if (onCheckInCompleteRef.current) {
+            onCheckInCompleteRef.current('QR code scanned successfully.');
           }
         }
       };
@@ -135,7 +150,7 @@ export const QrScanner: React.FC<QrScannerProps> = ({
         streamRef.current = null;
       }
     };
-  }, [onResult, onError, onCheckInComplete, scanIntervalMs]);
+  }, [scanIntervalMs, mode]);
 
   const statusLabel =
     status === 'starting'

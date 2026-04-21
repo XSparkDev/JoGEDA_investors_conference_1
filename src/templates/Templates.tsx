@@ -20,7 +20,8 @@ import {
   Linkedin,
   Eye,
   EyeOff,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { QrScanner } from '../components/QrScanner';
 import { RegisterQrSection } from '../components/RegisterQrSection';
@@ -563,11 +564,17 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showCredentials, setShowCredentials] = useState(false);
+  const [headshotPreviewUrl, setHeadshotPreviewUrl] = useState<string | null>(null);
+  const [headshotUploadError, setHeadshotUploadError] = useState<string | null>(null);
+  const [headshotUploadSuccess, setHeadshotUploadSuccess] = useState<string | null>(null);
+  const [headshotUploading, setHeadshotUploading] = useState(false);
+  const [headshotInputKey, setHeadshotInputKey] = useState(0);
 
   const apiBaseUrl =
     (import.meta as any).env?.VITE_BASE_URL ||
     (import.meta as any).env?.BASE_URL ||
     (typeof process !== 'undefined' ? (process as any).env?.BASE_URL : '');
+  const normalizedApiBaseUrl = String(apiBaseUrl || '').trim().replace(/\/+$/, '');
 
   const conferenceCode =
     (import.meta as any).env?.VITE_CONFERENCE_CODE ||
@@ -611,6 +618,66 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
   const deviceType = getDeviceType();
 
   const totalSteps = hideStep4 ? 3 : 4;
+  const MAX_HEADSHOT_SIZE_BYTES = 5 * 1024 * 1024;
+  const ALLOWED_HEADSHOT_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
+
+  useEffect(() => {
+    return () => {
+      if (headshotPreviewUrl) {
+        URL.revokeObjectURL(headshotPreviewUrl);
+      }
+    };
+  }, [headshotPreviewUrl]);
+
+  const clearHeadshotFeedback = () => {
+    setHeadshotUploadError(null);
+    setHeadshotUploadSuccess(null);
+  };
+
+  const removeHeadshot = () => {
+    if (headshotPreviewUrl) {
+      URL.revokeObjectURL(headshotPreviewUrl);
+    }
+    setFormData((prev) => ({ ...prev, headshot: null }));
+    setHeadshotPreviewUrl(null);
+    setHeadshotUploading(false);
+    clearHeadshotFeedback();
+    setHeadshotInputKey((prev) => prev + 1);
+  };
+
+  const handleHeadshotChange = async (file: File | null) => {
+    clearHeadshotFeedback();
+    if (!file) {
+      removeHeadshot();
+      return;
+    }
+
+    if (!ALLOWED_HEADSHOT_TYPES.has(file.type.toLowerCase())) {
+      setHeadshotUploadError('Please upload a JPG or PNG image.');
+      return;
+    }
+
+    if (file.size > MAX_HEADSHOT_SIZE_BYTES) {
+      setHeadshotUploadError('Image is too large. Please upload a file under 5MB.');
+      return;
+    }
+
+    setHeadshotUploading(true);
+    try {
+      if (headshotPreviewUrl) {
+        URL.revokeObjectURL(headshotPreviewUrl);
+      }
+      const preview = URL.createObjectURL(file);
+      setHeadshotPreviewUrl(preview);
+      setFormData((prev) => ({ ...prev, headshot: file }));
+      setHeadshotUploadSuccess('Headshot uploaded successfully.');
+    } catch (err) {
+      console.error('Headshot preview failed', err);
+      setHeadshotUploadError('We could not process that image. Please try another file.');
+    } finally {
+      setHeadshotUploading(false);
+    }
+  };
 
   // Single redirect page used by the "desktop" QR in step 4.
   // When scanned (typically by a phone), the redirect page forwards to the correct app store.
@@ -631,6 +698,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
     let notifySuccess = false;
 
     try {
+      if (!normalizedApiBaseUrl || /url\.co\.za/i.test(normalizedApiBaseUrl)) {
+        setError(
+          'Registration API is not configured. Please set VITE_BASE_URL in .env.local to the real XS API base URL.'
+        );
+        return;
+      }
+
       const trimmedPassword = password.trim();
       if (trimmedPassword.length < MIN_PASSWORD_LENGTH) {
         setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
@@ -651,7 +725,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         privacyAccepted: formData.photographyConsent
       };
 
-      const response = await fetch(`${apiBaseUrl}/AddUser`, {
+      const response = await fetch(`${normalizedApiBaseUrl}/AddUser`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -659,7 +733,13 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
         },
         body: JSON.stringify(payload),
       });
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = {};
+      }
 
       if (response.ok) {
         // AddUser creates the user account; UploadImages creates the card.
@@ -672,7 +752,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
 
         // JSON-only UploadImages: no alternatePhone and no images.
         const uploadImagesRes = await fetch(
-          `${apiBaseUrl}/Users/${encodeURIComponent(xsUserId)}/UploadImages`,
+          `${normalizedApiBaseUrl}/Users/${encodeURIComponent(xsUserId)}/UploadImages`,
           {
             method: 'POST',
             headers: {
@@ -751,10 +831,17 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
           setSuccess(true);
         }
       } else {
-        setError(data.message || 'Registration failed. Please try again.');
+        setError(
+          (data && data.message) ||
+            `Registration failed (${response.status} ${response.statusText}). Please try again.`
+        );
       }
     } catch (err) {
-      setError('A network error occurred. Please check your connection.');
+      const msg =
+        err instanceof Error && err.message
+          ? `Registration failed. ${err.message}`
+          : 'A network error occurred. Please check your connection.';
+      setError(msg);
       console.error('Registration error:', err);
     } finally {
       setLoading(false);
@@ -937,7 +1024,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         required
                         type="text" 
                         placeholder="e.g. John"
-                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                         value={formData.firstName}
                         onChange={e => setFormData({...formData, firstName: e.target.value})}
                       />
@@ -951,7 +1038,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         required
                         type="text" 
                         placeholder="e.g. Smith"
-                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                         value={formData.lastName}
                         onChange={e => setFormData({...formData, lastName: e.target.value})}
                       />
@@ -966,7 +1053,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     <input 
                       type="text" 
                       placeholder="e.g. Johnny"
-                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                       value={formData.preferredName}
                       onChange={e => setFormData({...formData, preferredName: e.target.value})}
                     />
@@ -982,7 +1069,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         required
                         type="text" 
                         placeholder="e.g. Director"
-                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                         value={formData.title}
                         onChange={e => setFormData({...formData, title: e.target.value})}
                       />
@@ -996,7 +1083,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         required
                         type="text" 
                         placeholder="e.g. Acme Corp"
-                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                         value={formData.organisation}
                         onChange={e => setFormData({...formData, organisation: e.target.value})}
                       />
@@ -1014,7 +1101,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         required
                         type="email" 
                         placeholder="john@example.com"
-                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                         value={formData.email}
                         onChange={e => setFormData({...formData, email: e.target.value})}
                       />
@@ -1028,7 +1115,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         required
                         type="tel" 
                         placeholder="+27..."
-                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                         value={formData.phone}
                         onChange={e => setFormData({...formData, phone: e.target.value})}
                       />
@@ -1046,7 +1133,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                         minLength={MIN_PASSWORD_LENGTH}
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Create a secure password"
-                        className="w-full pl-12 pr-12 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                        className="w-full pl-12 pr-12 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                       />
@@ -1085,7 +1172,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                       required
                       placeholder="Tell us about your professional background..."
                       rows={5}
-                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold resize-none"
+                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400 resize-none"
                       value={formData.bio}
                       onChange={e => setFormData({...formData, bio: e.target.value})}
                     />
@@ -1098,7 +1185,7 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-300" />
                     <select
                       required
-                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold appearance-none"
+                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400 appearance-none"
                       value={formData.investmentFocus}
                       onChange={e => setFormData({ ...formData, investmentFocus: e.target.value })}
                     >
@@ -1126,18 +1213,60 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">Upload Professional Headshot (optional)</label>
                   <div className="flex items-center justify-center w-full">
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-zinc-200 border-dashed rounded-xl cursor-pointer bg-zinc-50 hover:bg-zinc-100 transition-all">
-                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <Camera className="w-8 h-8 text-zinc-400 mb-2" />
-                        <p className="text-xs text-zinc-500 font-bold">
-                          {formData.headshot ? formData.headshot.name : 'Click to upload (JPG/PNG)'}
+                    <label className="flex flex-col items-center justify-center w-full min-h-40 border-2 border-zinc-200 border-dashed rounded-xl cursor-pointer bg-zinc-50 hover:bg-zinc-100 transition-all px-4 py-4">
+                      <div className="flex flex-col items-center justify-center gap-3 w-full">
+                        {headshotPreviewUrl ? (
+                          <img
+                            src={headshotPreviewUrl}
+                            alt="Headshot preview"
+                            className="h-24 w-24 rounded-full object-cover border border-zinc-200 shadow-sm"
+                          />
+                        ) : (
+                          <Camera className="w-8 h-8 text-zinc-400" />
+                        )}
+                        <p className="text-xs text-zinc-500 font-bold text-center break-all">
+                          {formData.headshot ? formData.headshot.name : 'Click to upload (JPG/PNG, max 5MB)'}
                         </p>
+                        {headshotUploading ? (
+                          <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-zinc-600">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Processing image...
+                          </span>
+                        ) : null}
+                        {headshotUploadSuccess ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-jogeda-green">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {headshotUploadSuccess}
+                          </span>
+                        ) : null}
+                        {headshotUploadError ? (
+                          <span className="text-[11px] font-semibold text-red-500">{headshotUploadError}</span>
+                        ) : null}
+                        {formData.headshot ? (
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-zinc-600">
+                              Replace
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                removeHeadshot();
+                              }}
+                              className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] text-red-600 hover:bg-red-100 transition-colors"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                       <input
+                        key={headshotInputKey}
                         type="file"
                         className="hidden"
-                        accept="image/*"
-                        onChange={e => setFormData({...formData, headshot: e.target.files?.[0] || null})}
+                        accept="image/jpeg,image/jpg,image/png"
+                        onChange={e => void handleHeadshotChange(e.target.files?.[0] || null)}
                       />
                     </label>
                   </div>
@@ -1167,10 +1296,37 @@ export const RegistrationForm: React.FC<RegistrationFormProps> = ({
                     <input 
                       type="text" 
                       placeholder="https://linkedin.com/in/..."
-                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold"
+                      className="w-full pl-12 pr-4 py-4 bg-zinc-50 border border-zinc-100 rounded-xl outline-none focus:border-jogeda-green transition-all font-bold text-black placeholder:text-zinc-400"
                       value={formData.linkedinWebsite}
                       onChange={e => setFormData({...formData, linkedinWebsite: e.target.value})}
                     />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-zinc-100 bg-zinc-50 p-4 md:p-5">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 mb-3">
+                    Preview
+                  </p>
+                  <div className="flex flex-col items-center">
+                    {headshotPreviewUrl ? (
+                      <img
+                        src={headshotPreviewUrl}
+                        alt="Headshot preview"
+                        className="mb-4 h-24 w-24 rounded-full object-cover border border-zinc-200 shadow-sm"
+                      />
+                    ) : null}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] w-full">
+                      <p><span className="font-black text-jogeda-dark">First Name:</span> <span className="text-zinc-600">{formData.firstName || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Last Name:</span> <span className="text-zinc-600">{formData.lastName || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Preferred Name:</span> <span className="text-zinc-600">{formData.preferredName || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Title:</span> <span className="text-zinc-600">{formData.title || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Organisation:</span> <span className="text-zinc-600">{formData.organisation || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Email:</span> <span className="text-zinc-600 break-all">{formData.email || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Phone:</span> <span className="text-zinc-600">{formData.phone || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Investment Focus:</span> <span className="text-zinc-600">{formData.investmentFocus || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">LinkedIn/Website:</span> <span className="text-zinc-600 break-all">{formData.linkedinWebsite || '—'}</span></p>
+                      <p><span className="font-black text-jogeda-dark">Photo Consent:</span> <span className="text-zinc-600">{formData.photoConsent ? 'Yes' : 'No'}</span></p>
+                    </div>
                   </div>
                 </div>
                 
