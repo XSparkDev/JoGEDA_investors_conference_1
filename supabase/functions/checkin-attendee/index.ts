@@ -1,5 +1,5 @@
 // Supabase Edge Function: checkin-attendee
-// Confirms registration via user-status-proxy, then marks checked_in in registrations (Option A).
+// Checks registration state in Supabase and returns explicit reason codes.
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
@@ -7,7 +7,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 type CheckinRequestBody = {
   uid: string;
   conferenceCode: string;
-  email?: string;
 };
 
 const corsHeaders = {
@@ -24,13 +23,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    // Used to authenticate internal calls to other Supabase Edge Functions.
-    // Supabase anon key is a JWT-like token and is not secret; it just allows function invocation.
-    const anonKey = Deno.env.get('ANON_KEY') ?? '';
-    const functionsBaseUrl =
-      Deno.env.get('EDGE_FUNCTIONS_BASE_URL') ??
-      Deno.env.get('FUNCTIONS_BASE_URL') ??
-      '';
 
     if (!supabaseUrl || !serviceRoleKey) {
       console.error('[checkin-attendee] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -73,22 +65,21 @@ serve(async (req) => {
       );
     }
 
-    const { uid, conferenceCode, email } = body;
+    const { uid, conferenceCode } = body;
+    const { data: registration, error: lookupError } = await supabase
+      .from('registrations')
+      .select('id, first_name, last_name, email_verified, checked_in')
+      .eq('xs_user_id', uid)
+      .eq('conference_code', conferenceCode)
+      .maybeSingle();
 
-    // Call user-status-proxy to confirm eligibility
-    const statusUrl = functionsBaseUrl
-      ? `${functionsBaseUrl}/user-status-proxy?uid=${encodeURIComponent(uid)}&conferenceCode=${encodeURIComponent(
-          conferenceCode,
-        )}`
-      : undefined;
-
-    if (!statusUrl) {
-      console.error('[checkin-attendee] FUNCTIONS_BASE_URL/EDGE_FUNCTIONS_BASE_URL not configured.');
+    if (lookupError) {
+      console.error('[checkin-attendee] Lookup by xs_user_id failed', lookupError);
       return new Response(
         JSON.stringify({
           ok: false,
-          reason: 'config_error',
-          message: 'Status proxy base URL not configured.',
+          reason: 'unexpected_error',
+          message: 'Failed to lookup delegate registration.',
         }),
         {
           status: 500,
@@ -100,116 +91,12 @@ serve(async (req) => {
       );
     }
 
-    // Gate check-in by asking XS if this user is valid for the conference.
-    const statusRes = await fetch(statusUrl, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(anonKey
-          ? {
-              apikey: anonKey,
-              Authorization: `Bearer ${anonKey}`,
-            }
-          : {}),
-      },
-    });
-
-    let statusData: any = {};
-    try {
-      statusData = await statusRes.json();
-    } catch {
-      statusData = {};
-    }
-
-    const success = Boolean(statusData.success);
-    const found = Boolean(statusData.found);
-    const allowed = Boolean(statusData.allowed);
-
-    if (!success || !found) {
+    if (!registration) {
       return new Response(
         JSON.stringify({
           ok: false,
           reason: 'not_registered',
-          message: 'User is not registered for this conference.',
-          status: { success, found, allowed },
-          raw: statusData,
-        }),
-        {
-          status: 403,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-    }
-
-    if (!allowed) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          reason: 'not_allowed',
-          message: 'User is not allowed for this conference.',
-          status: { success, found, allowed },
-          raw: statusData,
-        }),
-        {
-          status: 403,
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json',
-          },
-        },
-      );
-    }
-
-    // At this point the user is confirmed as registered & allowed.
-    // Mark them as checked in (Option A).
-
-    // Try to find by xs_user_id first, then fallback to email + conference_code
-    let registrationId: string | null = null;
-    let emailVerified = false;
-
-    if (uid) {
-      const { data, error } = await supabase
-        .from('registrations')
-        .select('id, email_verified')
-        .eq('xs_user_id', uid)
-        .eq('conference_code', conferenceCode)
-        .maybeSingle();
-
-      if (error) {
-        console.error('[checkin-attendee] Lookup by xs_user_id failed', error);
-      } else if (data) {
-        registrationId = (data as any).id ?? null;
-        emailVerified = Boolean((data as any).email_verified);
-      }
-    }
-
-    if (!registrationId && email) {
-      const { data, error } = await supabase
-        .from('registrations')
-        .select('id, email_verified')
-        .eq('conference_code', conferenceCode)
-        .ilike('email', email)
-        .maybeSingle();
-
-      if (error) {
-        console.error('[checkin-attendee] Lookup by email failed', error);
-      } else if (data) {
-        registrationId = (data as any).id ?? null;
-        emailVerified = Boolean((data as any).email_verified);
-      }
-    }
-
-    if (!registrationId) {
-      console.warn('[checkin-attendee] No matching registration found in Supabase for check-in');
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          reason: 'registration_not_found',
-          message:
-            'User is allowed by XS, but no matching registration record was found in Supabase for check-in.',
+          message: 'This QR is not registered.',
         }),
         {
           status: 404,
@@ -221,12 +108,18 @@ serve(async (req) => {
       );
     }
 
+    const attendeeName = `${(registration as any).first_name ?? ''} ${(registration as any).last_name ?? ''}`
+      .trim();
+    const checkedIn = Boolean((registration as any).checked_in);
+    const emailVerified = Boolean((registration as any).email_verified);
+
     if (!emailVerified) {
       return new Response(
         JSON.stringify({
           ok: false,
           reason: 'email_not_verified',
           message: 'Delegate email is not verified yet.',
+          name: attendeeName || 'User Found',
         }),
         {
           status: 403,
@@ -238,14 +131,31 @@ serve(async (req) => {
       );
     }
 
-    // Option A: update check-in state directly on registrations table.
+    if (checkedIn) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          reason: 'already_checked_in',
+          message: 'Delegate is already checked in.',
+          name: attendeeName || 'User Found',
+        }),
+        {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+    }
+
     const { error: updateError } = await supabase
       .from('registrations')
       .update({
         checked_in: true,
         checked_in_at: new Date().toISOString(),
       })
-      .eq('id', registrationId);
+      .eq('id', (registration as any).id);
 
     if (updateError) {
       console.error('[checkin-attendee] Failed to update check-in state', updateError);
@@ -268,7 +178,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         ok: true,
+        reason: 'checked_in',
         message: 'Delegate checked in successfully.',
+        name: attendeeName || 'User Found',
       }),
       {
         status: 200,

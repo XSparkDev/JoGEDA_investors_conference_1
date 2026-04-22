@@ -7,6 +7,7 @@ type QrScannerProps = {
   scanIntervalMs?: number;
   onCheckInComplete?: (message: string) => void;
   mode?: 'default' | 'badge';
+  pauseScanning?: boolean;
 };
 
 type ScannerStatus = 'idle' | 'starting' | 'scanning' | 'error';
@@ -17,6 +18,7 @@ export const QrScanner: React.FC<QrScannerProps> = ({
   scanIntervalMs = 250,
   onCheckInComplete,
   mode = 'default',
+  pauseScanning = false,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -25,6 +27,7 @@ export const QrScanner: React.FC<QrScannerProps> = ({
   const onResultRef = useRef(onResult);
   const onErrorRef = useRef(onError);
   const onCheckInCompleteRef = useRef(onCheckInComplete);
+  const pauseScanningRef = useRef(pauseScanning);
 
   const [status, setStatus] = useState<ScannerStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -40,6 +43,10 @@ export const QrScanner: React.FC<QrScannerProps> = ({
   useEffect(() => {
     onCheckInCompleteRef.current = onCheckInComplete;
   }, [onCheckInComplete]);
+
+  useEffect(() => {
+    pauseScanningRef.current = pauseScanning;
+  }, [pauseScanning]);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +128,7 @@ export const QrScanner: React.FC<QrScannerProps> = ({
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const result = jsQR(imageData.data, imageData.width, imageData.height);
 
-        if (result && result.data) {
+        if (!pauseScanningRef.current && result && result.data) {
           const value = result.data;
           onResultRef.current(value);
 

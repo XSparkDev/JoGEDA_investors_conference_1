@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, CheckCircle2, RefreshCw, Search, UserPlus, X } from 'lucide-react';
+import { Camera, CheckCircle2, Loader2, RefreshCw, Search, UserPlus, X } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -35,6 +35,8 @@ export function AttendeeDashboard() {
     tone: 'success' | 'warning' | 'error';
     title: string;
     body: string;
+    loading?: boolean;
+    durationMs?: number;
   } | null>(null);
   const [scanProcessing, setScanProcessing] = useState(false);
   const lastScanRef = useRef<{ value: string; at: number } | null>(null);
@@ -177,7 +179,8 @@ export function AttendeeDashboard() {
 
   useEffect(() => {
     if (!scanToast) return;
-    const id = window.setTimeout(() => setScanToast(null), 3600);
+    if (!scanToast.durationMs || scanToast.durationMs <= 0) return;
+    const id = window.setTimeout(() => setScanToast(null), scanToast.durationMs);
     return () => window.clearTimeout(id);
   }, [scanToast]);
 
@@ -185,6 +188,9 @@ export function AttendeeDashboard() {
     if (!scannerOpen) {
       setScanProcessing(false);
       lastScanRef.current = null;
+    } else {
+      // Keep feedback localized to the scanner modal while scanning.
+      setToast(null);
     }
   }, [scannerOpen]);
 
@@ -331,7 +337,8 @@ export function AttendeeDashboard() {
   );
 
   const getAttendeeQrValue = (attendee: Attendee) => {
-    const linkedId = attendee.xsUserId || String(attendee.id);
+    const linkedId = (attendee.xsUserId || '').trim();
+    if (!linkedId) return '';
     return `https://joegqabiinvestment.co.za/?userId=${encodeURIComponent(linkedId)}`;
   };
 
@@ -339,18 +346,16 @@ export function AttendeeDashboard() {
     const cleaned = raw.trim();
     if (!cleaned) return '';
     try {
-      const looksLikeUrl = /^https?:\/\//i.test(cleaned) || /^www\./i.test(cleaned);
-      if (!looksLikeUrl) return cleaned;
-      const normalized = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
+      const normalized = /^https?:\/\//i.test(cleaned)
+        ? cleaned
+        : /^www\./i.test(cleaned)
+          ? `https://${cleaned}`
+          : cleaned;
       const urlObj = new URL(normalized);
-      return (
-        (urlObj.searchParams.get('userId') ||
-          urlObj.searchParams.get('uid') ||
-          urlObj.searchParams.get('xsUserId') ||
-          '') as string
-      ).trim();
+      // XS Card QR payloads may vary by domain/path; userId is the source of truth.
+      return (urlObj.searchParams.get('userId') || '').trim();
     } catch {
-      return cleaned;
+      return '';
     }
   };
 
@@ -686,11 +691,13 @@ export function AttendeeDashboard() {
                           <div className="absolute right-0 mt-2 w-44 rounded-xl border border-zinc-200 bg-white shadow-lg z-20 overflow-hidden">
                             <button
                               type="button"
-                              disabled={!attendee.email || !attendee.xsUserId}
+                              disabled={!attendee.email || !attendee.xsUserId || attendee.emailVerified === true}
                               className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors ${
-                                !attendee.email || !attendee.xsUserId
-                                  ? 'text-zinc-400 cursor-default bg-zinc-50'
-                                  : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white'
+                                attendee.emailVerified === true
+                                  ? 'text-green-600 cursor-default bg-zinc-50'
+                                  : !attendee.email || !attendee.xsUserId
+                                    ? 'text-zinc-400 cursor-default bg-zinc-50'
+                                    : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white'
                               }`}
                               onClick={() => {
                                 (async () => {
@@ -743,80 +750,162 @@ export function AttendeeDashboard() {
                                         body:
                                           (verifyData &&
                                             (verifyData.message as string | undefined)) ||
-                                          (verifyRes.ok
-                                            ? 'Delegate email could not be marked as verified.'
-                                            : 'Verify request failed. Please try again.'),
-                                      });
-                                      return;
-                                    }
-
-                                    const res = await fetch(
-                                      `${supabaseFunctionsBaseUrl}/checkin-attendee`,
-                                      {
-                                        method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                          ...(supabaseAnonKey
-                                            ? {
-                                                apikey: supabaseAnonKey,
-                                                Authorization: `Bearer ${supabaseAnonKey}`,
-                                              }
-                                            : {}),
-                                        },
-                                        body: JSON.stringify({
-                                          uid: attendee.xsUserId,
-                                          conferenceCode,
-                                        }),
-                                      }
-                                    );
-
-                                    const data = await res
-                                      .json()
-                                      .catch(() => ({} as any));
-
-                                    if (!res.ok) {
-                                      const reason = data.reason as string | undefined;
-                                      const message =
-                                        (data &&
-                                          (data.message as string | undefined)) ||
-                                        'Check-in failed. Please try again.';
-
-                                      setToast({
-                                        type: 'error',
-                                        title:
-                                          reason === 'not_registered'
-                                            ? 'Not Registered'
-                                            : reason === 'not_allowed'
-                                              ? 'Not Allowed'
-                                              : reason === 'email_not_verified'
-                                                ? 'Email Not Verified'
-                                              : 'Check-in Error',
-                                        body: message,
+                                          'Could not verify delegate email. Please try again.',
                                       });
                                       return;
                                     }
 
                                     setToast({
                                       type: 'success',
-                                      title: 'Verified',
-                                      body:
-                                        (data && (data.message as string | undefined)) ||
-                                        'Delegate has been verified and checked in successfully.',
+                                      title: 'Email Verified',
+                                      body: `${attendee.name} has been verified successfully.`,
                                     });
 
-                                    await fetchAttendees();
+                                    await fetchAttendees(true);
                                   } catch (err) {
-                                    console.error('Check-in failed', err);
+                                    console.error('Verify failed', err);
                                     setToast({
                                       type: 'error',
-                                      title: 'Network Error',
-                                      body: 'We could not reach the check-in service. Please try again.',
+                                      title: 'Verify Failed',
+                                      body: 'Verify request failed. Please try again.',
                                     });
                                   }
                                 })();
                               }}
                             >
-                              Verify
+                              {attendee.emailVerified === true ? 'Email Verified' : 'Verify Email'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={
+                                !attendee.xsUserId ||
+                                attendee.status === 'Confirmed' ||
+                                attendee.emailVerified !== true
+                              }
+                              className={`w-full px-4 py-3 text-center text-[11px] font-black uppercase tracking-[0.16em] transition-colors border-t ${
+                                attendee.status === 'Confirmed'
+                                  ? 'text-green-600 cursor-default bg-zinc-50 border-zinc-100'
+                                  : attendee.emailVerified !== true
+                                    ? 'text-amber-500 cursor-default bg-zinc-50 border-zinc-100'
+                                    : !attendee.xsUserId
+                                      ? 'text-zinc-400 cursor-default bg-zinc-50 border-zinc-100'
+                                      : 'text-jogeda-dark hover:bg-jogeda-green/10 bg-white border-zinc-100'
+                              }`}
+                              onClick={() => {
+                                (async () => {
+                                  setOpenActionForId(null);
+                                  try {
+                                    if (!supabaseFunctionsBaseUrl) {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Check-in Error',
+                                        body: 'Supabase functions URL is not configured.',
+                                      });
+                                      return;
+                                    }
+
+                                    if (!attendee.xsUserId) return;
+
+                                    const res = await fetch(`${supabaseFunctionsBaseUrl}/checkin-attendee`, {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        ...(supabaseAnonKey
+                                          ? {
+                                              apikey: supabaseAnonKey,
+                                              Authorization: `Bearer ${supabaseAnonKey}`,
+                                            }
+                                          : {}),
+                                      },
+                                      body: JSON.stringify({
+                                        uid: attendee.xsUserId,
+                                        conferenceCode,
+                                      }),
+                                    });
+
+                                    const data = await res.json().catch(() => ({} as any));
+                                    const reason = data?.reason as string | undefined;
+
+                                    if (reason === 'checked_in' && res.ok) {
+                                      setToast({
+                                        type: 'success',
+                                        title: 'Checked In',
+                                        body: `${attendee.name} has been checked in successfully.`,
+                                      });
+                                      await fetchAttendees(true);
+                                      return;
+                                    }
+
+                                    if (reason === 'not_registered') {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Not Registered',
+                                        body: 'This delegate is not registered for this conference.',
+                                      });
+                                      return;
+                                    }
+
+                                    if (reason === 'not_allowed') {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Not Allowed',
+                                        body: 'This delegate is not allowed for this conference.',
+                                      });
+                                      return;
+                                    }
+
+                                    if (reason === 'email_not_verified') {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Email Not Verified',
+                                        body:
+                                          'This delegate has not verified their email yet. Use Verify Email first.',
+                                      });
+                                      return;
+                                    }
+
+                                    if (reason === 'registration_not_found') {
+                                      setToast({
+                                        type: 'error',
+                                        title: 'Not Found',
+                                        body: 'No matching registration record found.',
+                                      });
+                                      return;
+                                    }
+
+                                    if (reason === 'already_checked_in') {
+                                      setToast({
+                                        type: 'success',
+                                        title: 'Checked In',
+                                        body: `${attendee.name} has been checked in successfully.`,
+                                      });
+                                      await fetchAttendees(true);
+                                      return;
+                                    }
+
+                                    setToast({
+                                      type: 'error',
+                                      title: 'Check-in Error',
+                                      body:
+                                        (data && (data.message as string | undefined)) ||
+                                        'Check-in failed. Please try again.',
+                                    });
+                                  } catch (err) {
+                                    console.error('Check-in failed', err);
+                                    setToast({
+                                      type: 'error',
+                                      title: 'Check-in Error',
+                                      body: 'Check-in failed. Please try again.',
+                                    });
+                                  }
+                                })();
+                              }}
+                            >
+                              {attendee.status === 'Confirmed'
+                                ? 'Checked In'
+                                : attendee.emailVerified !== true
+                                  ? 'Not Verified'
+                                  : 'Check In'}
                             </button>
                             <button
                               type="button"
@@ -867,7 +956,11 @@ export function AttendeeDashboard() {
                 </p>
               </div>
               <QrScanner
+                mode="default"
+                scanIntervalMs={250}
+                pauseScanning={scanProcessing}
                 onResult={(value) => {
+                  setToast(null);
                   if (scanProcessing) return;
                   const cleaned = value.trim();
                   const now = Date.now();
@@ -887,8 +980,9 @@ export function AttendeeDashboard() {
                       if (!supabaseFunctionsBaseUrl) {
                         setScanToast({
                           tone: 'error',
-                          title: 'Attendee Not Found',
-                          body: 'QR code is not registered',
+                          title: 'Invalid QR Code',
+                          body: 'Please scan a valid delegate QR',
+                          durationMs: 3000,
                         });
                         return;
                       }
@@ -898,25 +992,21 @@ export function AttendeeDashboard() {
                       if (!userId) {
                         setScanToast({
                           tone: 'error',
-                          title: 'Attendee Not Found',
-                          body: 'QR code is not registered',
+                          title: 'Invalid QR Code',
+                          body: 'Please scan a valid delegate QR',
+                          durationMs: 3000,
                         });
                         return;
                       }
 
-                      const attendeeBeforeScan = attendees.find(
-                        (a) =>
-                          (a.xsUserId && a.xsUserId.trim() === userId) ||
-                          String(a.id).trim() === userId
-                      );
-                      if (attendeeBeforeScan?.status === 'Confirmed') {
-                        setScanToast({
-                          tone: 'warning',
-                          title: attendeeBeforeScan.name || 'Attendee',
-                          body: 'Already Checked In',
-                        });
-                        return;
-                      }
+                      const attendeeBeforeScan = attendees.find((a) => a.xsUserId?.trim() === userId);
+                      setScanToast({
+                        tone: 'success',
+                        title: attendeeBeforeScan?.name || 'User Found',
+                        body: 'Checking In...',
+                        loading: true,
+                        durationMs: 0,
+                      });
 
                       const res = await fetch(
                         `${supabaseFunctionsBaseUrl}/checkin-attendee`,
@@ -938,65 +1028,79 @@ export function AttendeeDashboard() {
                         }
                       );
 
-                      if (!res.ok) {
-                        let errBody: any = {};
-                        try {
-                          errBody = await res.json();
-                        } catch {
-                          // ignore
-                        }
-                        const reason = errBody.reason as string | undefined;
-                        if (reason === 'not_registered' || reason === 'registration_not_found') {
-                          setScanToast({
-                            tone: 'error',
-                            title: 'Attendee Not Found',
-                            body: 'QR code is not registered',
-                          });
-                        } else if (reason === 'not_allowed') {
-                          setScanToast({
-                            tone: 'error',
-                            title: attendeeBeforeScan?.name || 'Attendee Not Allowed',
-                            body: 'This attendee is not allowed for this conference',
-                          });
-                        } else if (reason === 'email_not_verified') {
-                          setScanToast({
-                            tone: 'error',
-                            title: attendeeBeforeScan?.name || 'Email Not Verified',
-                            body: 'Delegate email is not verified yet',
-                          });
-                        } else {
-                          setScanToast({
-                            tone: 'error',
-                            title: 'Attendee Not Found',
-                            body: 'QR code is not registered',
-                          });
-                        }
+                      const data = await res.json().catch(() => ({} as any));
+                      const reason = (data?.reason as string | undefined) || '';
+                      const attendeeName =
+                        (data?.name as string | undefined) ||
+                        attendeeBeforeScan?.name ||
+                        'User Found';
+
+                      if (reason === 'checked_in' && res.ok) {
+                        setScanToast({
+                          tone: 'success',
+                          title: attendeeName,
+                          body: 'Checked In',
+                          durationMs: 3000,
+                        });
+                        void fetchAttendees(true);
                         return;
                       }
 
-                      // Success: delegate checked in
-                      const attendeeName =
-                        attendeeBeforeScan?.name ||
-                        attendees.find(
-                          (a) =>
-                            (a.xsUserId && a.xsUserId.trim() === userId) ||
-                            String(a.id).trim() === userId
-                        )?.name ||
-                        'Attendee';
-                      setScanToast({
-                        tone: 'success',
-                        title: attendeeName,
-                        body: 'QR Code Successfully Scanned',
-                      });
+                      if (reason === 'already_checked_in' && res.ok) {
+                        setScanToast({
+                          tone: 'warning',
+                          title: attendeeName,
+                          body: 'Already Checked In',
+                          durationMs: 3000,
+                        });
+                        return;
+                      }
 
-                      // Refresh attendees to reflect updated check-in state
-                      void fetchAttendees(true);
+                      if (reason === 'email_not_verified') {
+                        setScanToast({
+                          tone: 'warning',
+                          title: attendeeName,
+                          body: 'User Found, Email Not Verified',
+                          durationMs: 4000,
+                        });
+                        return;
+                      }
+
+                      if (reason === 'not_registered' || reason === 'registration_not_found') {
+                        setScanToast({
+                          tone: 'error',
+                          title: 'User Not Found',
+                          body: 'This QR is not registered',
+                          durationMs: 3000,
+                        });
+                        return;
+                      }
+
+                      // Backward compatibility: older checkin-attendee responses may return ok:true without reason.
+                      if (res.ok) {
+                        setScanToast({
+                          tone: 'success',
+                          title: attendeeName,
+                          body: 'Checked In',
+                          durationMs: 3000,
+                        });
+                        void fetchAttendees(true);
+                        return;
+                      }
+
+                      setScanToast({
+                        tone: 'error',
+                        title: 'Invalid QR Code',
+                        body: 'Please scan a valid delegate QR',
+                        durationMs: 3000,
+                      });
                     } catch (err) {
                       console.error('Status check failed', err);
                       setScanToast({
                         tone: 'error',
-                        title: 'Attendee Not Found',
-                        body: 'QR code is not registered',
+                        title: 'Invalid QR Code',
+                        body: 'Please scan a valid delegate QR',
+                        durationMs: 3000,
                       });
                     } finally {
                       window.setTimeout(() => setScanProcessing(false), 1200);
@@ -1004,12 +1108,14 @@ export function AttendeeDashboard() {
                   })();
                 }}
                 onError={(message) => {
+                  setToast(null);
                   setScanToast({
                     tone: 'error',
                     title: 'Camera Unavailable',
                     body:
                       message ||
                       'Unable to access camera. Please check browser permissions and that a camera is available.',
+                    durationMs: 3500,
                   });
                 }}
                 onCheckInComplete={() => {}}
@@ -1025,7 +1131,10 @@ export function AttendeeDashboard() {
                   }`}
                 >
                   <p className="text-base font-black uppercase tracking-[0.06em]">{scanToast.title}</p>
-                  <p className="text-xs font-semibold mt-1">{scanToast.body}</p>
+                  <p className="text-xs font-semibold mt-1 inline-flex items-center gap-2">
+                    {scanToast.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    <span>{scanToast.body}</span>
+                  </p>
                 </div>
               )}
             </div>
@@ -1096,7 +1205,7 @@ export function AttendeeDashboard() {
                   {previewAttendee ? (
                     previewAttendee.xsUserId && previewAttendee.xsUserId.trim() ? (
                       <div className="mt-3 flex items-center justify-center rounded-lg bg-white p-2">
-                        <QRCode value={previewAttendee.xsUserId.trim()} size={120} />
+                        <QRCode value={getAttendeeQrValue(previewAttendee)} size={120} />
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-zinc-500">Missing XS user ID</p>
