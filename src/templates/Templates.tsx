@@ -33,12 +33,16 @@ interface TemplateProps {
 }
 
 export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmin }) => {
+  const REGISTRATION_CLOSED_MESSAGE =
+    'Registration is now closed. We have reached full capacity for the Investment Conference 2026.';
+  const [isRegistrationClosed] = useState(true);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [checkInMessage, setCheckInMessage] = useState<string | null>(null);
   const [hasOpenedUrlForScan, setHasOpenedUrlForScan] = useState(false);
   const [showRegisteredModal, setShowRegisteredModal] = useState(false);
+  const [closedToastOpen, setClosedToastOpen] = useState(false);
 
   // About section image carousel
   const aboutSectionImages = [
@@ -56,6 +60,16 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
 
     return () => window.clearInterval(intervalId);
   }, [aboutSectionImages.length]);
+
+  useEffect(() => {
+    if (!closedToastOpen) return;
+    const timeoutId = window.setTimeout(() => setClosedToastOpen(false), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [closedToastOpen]);
+
+  const handleClosedRegistrationAttempt = () => {
+    setClosedToastOpen(true);
+  };
   const sectorContainer = {
     hidden: {},
     show: {
@@ -157,8 +171,14 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <button 
-                    onClick={onRegister}
-                    className="inline-flex items-center justify-center bg-jogeda-dark text-white px-6 sm:px-10 py-5 font-display font-black uppercase tracking-widest text-center whitespace-nowrap hover:bg-jogeda-green hover:text-jogeda-dark transition-all w-fit shadow-lg shadow-black/10"
+                    type="button"
+                    onClick={isRegistrationClosed ? handleClosedRegistrationAttempt : onRegister}
+                    aria-disabled={isRegistrationClosed}
+                    className={`inline-flex items-center justify-center px-6 sm:px-10 py-5 font-display font-black uppercase tracking-widest text-center whitespace-nowrap transition-all w-fit shadow-lg shadow-black/10 ${
+                      isRegistrationClosed
+                        ? 'bg-[#9e9e9e] text-white cursor-not-allowed'
+                        : 'bg-jogeda-dark text-white hover:bg-jogeda-green hover:text-jogeda-dark'
+                    }`}
                   >
                     Register Now
                   </button>
@@ -435,7 +455,10 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
         </div>
       </section>
 
-      <RegisterQrSection />
+      <RegisterQrSection
+        isRegistrationClosed={isRegistrationClosed}
+        onAttemptRegister={handleClosedRegistrationAttempt}
+      />
 
       {/* Partners Section */}
       <section className="py-24 bg-white border-t border-zinc-100">
@@ -503,8 +526,14 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
               Join us in Maletswai this June to explore the bankable projects shaping the future of the Joe Gqabi District.
             </p>
             <button 
-              onClick={onRegister}
-              className="inline-flex items-center justify-center w-full px-6 py-5 rounded-xl bg-jogeda-green text-jogeda-dark font-display font-black uppercase tracking-widest text-center hover:scale-[1.02] transition-transform"
+              type="button"
+              onClick={isRegistrationClosed ? handleClosedRegistrationAttempt : onRegister}
+              aria-disabled={isRegistrationClosed}
+              className={`inline-flex items-center justify-center w-full px-6 py-5 rounded-xl font-display font-black uppercase tracking-widest text-center ${
+                isRegistrationClosed
+                  ? 'bg-[#9e9e9e] text-white cursor-not-allowed'
+                  : 'bg-jogeda-green text-jogeda-dark hover:scale-[1.02] transition-transform'
+              }`}
             >
               Secure Your Delegate Spot
             </button>
@@ -522,6 +551,35 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
           </button>
         </div>
       </footer>
+      <AnimatePresence>
+        {closedToastOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -16 }}
+            className="fixed left-1/2 top-6 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2"
+          >
+            <div className="relative rounded-2xl border border-jogeda-green/30 bg-[#1a1a1a] px-5 py-4 text-white shadow-2xl">
+              <button
+                type="button"
+                onClick={() => setClosedToastOpen(false)}
+                className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/80 transition-colors hover:border-white/40 hover:text-white"
+                aria-label="Close notification"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <div className="pr-10 text-center">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#6b8e23]">
+                  Registration Closed
+                </p>
+                <p className="mt-2 text-sm font-medium leading-relaxed">
+                  {REGISTRATION_CLOSED_MESSAGE}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
