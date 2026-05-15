@@ -472,6 +472,10 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
             <img src="/assets/images/10.png" alt="Partner Logo 2" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
             <img src="/assets/images/11.png" alt="Partner Logo 3" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
             <img src="/assets/images/12.png" alt="Partner Logo 4" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/13.png" alt="Partner Logo 5" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/15.png" alt="Partner Logo 6" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/17.png" alt="Partner Logo 7" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+            <img src="/assets/images/19.png" alt="Partner Logo 8" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
           </div>
         </div>
       </section>
