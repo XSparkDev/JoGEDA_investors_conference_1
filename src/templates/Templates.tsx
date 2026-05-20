@@ -27,6 +27,18 @@ import { QrScanner } from '../components/QrScanner';
 import { RegisterQrSection } from '../components/RegisterQrSection';
 import QRCode from 'react-qr-code';
 
+/** Per-logo scale compensates for baked-in whitespace so visual weight reads even in a 160×80 box. */
+const PARTNER_LOGOS: { src: string; alt: string; scale: number }[] = [
+  { src: '/assets/images/9.png', alt: 'Partner Logo 1', scale: 1.45 },
+  { src: '/assets/images/10.png', alt: 'Partner Logo 2', scale: 1.45 },
+  { src: '/assets/images/11.png', alt: 'Partner Logo 3', scale: 1.45 },
+  { src: '/assets/images/12.png', alt: 'Walter Sisulu Local Municipality', scale: 1.35 },
+  { src: '/assets/images/13.png', alt: 'Kuhle Solutions', scale: 1.55 },
+  { src: '/assets/images/15.png', alt: 'Eastern Cape Department of Economic Development', scale: 1.75 },
+  { src: '/assets/images/17.png', alt: 'Amalooloo', scale: 1.18 },
+  { src: '/assets/images/19.png', alt: 'Partner Logo 8', scale: 1.55 },
+];
+
 interface TemplateProps {
   onRegister: () => void;
   onOpenAdmin: () => void;
@@ -461,21 +473,29 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
       />
 
       {/* Partners Section */}
-      <section className="py-24 bg-white border-t border-zinc-100">
+      <section className="border-t border-b border-zinc-100 bg-zinc-50/50">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center mb-16">
+          <div className="text-center pt-16 mb-16">
             <span className="sub-heading">Collaborators</span>
             <h2 className="section-heading">Our <span className="text-jogeda-green">Partners</span></h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 items-center justify-items-center opacity-70 grayscale hover:grayscale-0 transition-all duration-500">
-            <img src="/assets/images/9.png" alt="Partner Logo 1" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="/assets/images/10.png" alt="Partner Logo 2" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="/assets/images/11.png" alt="Partner Logo 3" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="/assets/images/12.png" alt="Partner Logo 4" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="/assets/images/13.png" alt="Partner Logo 5" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="/assets/images/15.png" alt="Partner Logo 6" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="/assets/images/17.png" alt="Partner Logo 7" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
-            <img src="/assets/images/19.png" alt="Partner Logo 8" className="h-24 md:h-32 w-auto object-contain" referrerPolicy="no-referrer" />
+          <div
+            className="mx-auto grid w-full max-w-[72rem] grid-cols-2 place-items-center gap-x-12 gap-y-16 px-8 py-[60px] opacity-70 grayscale transition-all duration-500 hover:grayscale-0 sm:gap-x-20 sm:gap-y-20 lg:grid-cols-4 lg:gap-x-24 lg:gap-y-14"
+            aria-label="Partner logos"
+          >
+            {PARTNER_LOGOS.map((logo) => (
+              <div key={logo.src} className="flex items-center justify-center p-4 sm:p-6 lg:p-8">
+                <div className="flex h-[60px] w-[120px] shrink-0 items-center justify-center overflow-visible sm:h-[80px] sm:w-[160px]">
+                  <img
+                    src={logo.src}
+                    alt={logo.alt}
+                    style={{ transform: `scale(${logo.scale})` }}
+                    className="h-full w-full object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
