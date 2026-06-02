@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { QrScanner } from '../components/QrScanner';
 import { RegisterQrSection } from '../components/RegisterQrSection';
+import { SpeakersCarousel } from '../components/SpeakersCarousel';
 import QRCode from 'react-qr-code';
 
 /** Per-logo scale compensates for baked-in whitespace so visual weight reads even in a 160×80 box. */
@@ -37,6 +38,13 @@ const PARTNER_LOGOS: { src: string; alt: string; scale: number }[] = [
   { src: '/assets/images/15.png', alt: 'Eastern Cape Department of Economic Development', scale: 1.75 },
   { src: '/assets/images/17.png', alt: 'Amalooloo', scale: 1.18 },
   { src: '/assets/images/19.png', alt: 'Partner Logo 8', scale: 1.55 },
+  { src: '/pat1.jpg', alt: 'Partner Logo 9', scale: 1.65 },
+  { src: '/pat2.jpg', alt: 'Partner Logo 10', scale: 1.65 },
+  { src: '/pat3.jpg', alt: 'Partner Logo 11', scale: 1.65 },
+  { src: '/pat4.jpg', alt: 'Partner Logo 12', scale: 1.65 },
+  { src: '/pat5.jpg', alt: 'Partner Logo 13', scale: 1.65 },
+  { src: '/pat7.jpg', alt: 'Partner Logo 15', scale: 2.3 },
+  { src: '/pat8.jpg', alt: 'Partner Logo 16', scale: 3.2 },
 ];
 
 interface TemplateProps {
@@ -55,6 +63,7 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
   const [hasOpenedUrlForScan, setHasOpenedUrlForScan] = useState(false);
   const [showRegisteredModal, setShowRegisteredModal] = useState(false);
   const [closedToastOpen, setClosedToastOpen] = useState(false);
+  const [speakersScrollKey, setSpeakersScrollKey] = useState(0);
 
   // About section image carousel
   const aboutSectionImages = [
@@ -82,6 +91,26 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
   const handleClosedRegistrationAttempt = () => {
     setClosedToastOpen(true);
   };
+
+  const scrollToSpeakers = () => {
+    if (typeof window === 'undefined') return;
+    const el = window.document.getElementById('our-speakers');
+    if (el && 'scrollIntoView' in el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    // Fallback: if the element isn't mounted yet for some reason, retry once.
+    setSpeakersScrollKey((v) => v + 1);
+  };
+
+  useEffect(() => {
+    if (!speakersScrollKey) return;
+    const timeoutId = window.setTimeout(() => {
+      const el = window.document.getElementById('our-speakers');
+      el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    return () => window.clearTimeout(timeoutId);
+  }, [speakersScrollKey]);
   const sectorContainer = {
     hidden: {},
     show: {
@@ -411,8 +440,20 @@ export const JoGedaTemplate: React.FC<TemplateProps> = ({ onRegister, onOpenAdmi
               </div>
             ))}
           </div>
+
+          <div className="mt-12 flex justify-center">
+            <button
+              type="button"
+              onClick={scrollToSpeakers}
+              className="inline-flex items-center justify-center px-6 sm:px-10 py-5 font-display font-black uppercase tracking-widest text-center whitespace-nowrap transition-all w-fit shadow-lg shadow-black/10 bg-jogeda-dark text-white hover:bg-jogeda-green hover:text-jogeda-dark"
+            >
+              Meet Our Speakers
+            </button>
+          </div>
         </div>
       </section>
+
+      <SpeakersCarousel />
 
       {/* Priority Sectors */}
       <section className="py-24 bg-jogeda-green text-white">
